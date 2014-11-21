@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [ $# -ne 3 ]; then
+	echo "usage: migrateUser USERNAME DOMAIN MYSQLPASSWORD"
+	exit
+fi
+
+VHUSERNAME=$1
+VHDOMAIN=$2
+VHPASS=$3
+
+#################
+# DUMP DBS
+
+ARCHIVE_DATE=$(date +%Y-%m-%d-%H-%M)
+BACKUPDIR="/tmp/migrate/$VHUSERNAME/$ARCHIVE_DATE/"
+
+if [ ! -d "$BACKUPDIR" ]; then
+	mkdir -p "$BACKUPDIR"
+fi
+
+for i in `/usr/bin/mysql --user=$VHUSERNAME --password=$VHPASS --batch --skip-column-names -e "show databases" | sed 's/ /%/g'`;do
+	NEWNAME="$i-$ARCHIVE_DATE"
+	nice -n 19 /usr/bin/mysqldump -u $VHUSERNAME -p$VHPASS "$i" > "$BACKUPDIR$NEWNAME".sql
+	gzip "$BACKUPDIR$NEWNAME".sql
+done
+
+#################
+# COMPRESS PUBLIC_HTML
+#
+
+HOSTDIR="/var/www/homes/$VHUSERNAME/public_html"
+tar --verbose --directory "$HOSTDIR" --create --gzip --file $BACKUPDIR$VHUSERNAME.tar.gz .

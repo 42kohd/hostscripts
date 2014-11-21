@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cat /etc/apache2/sites-available/* | grep ServerAdmin | sed -e '/NAME@DOMAIN/d' -e '/webmaster@localhost/d' -e 's/ServerAdmin //g'

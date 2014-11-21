@@ -1,0 +1,24 @@
+#!/bin/bash
+
+TESTINEXT=$(echo $1 | sed 's/^.*[.]//')
+TESTINPRE=$(echo $1 | sed 's/[.].*//')
+TESTINPRECNT=${#TESTINPRE}
+
+if [ "$TESTINPRECNT" -lt 3 ]; then
+	echo "0"
+	exit
+fi
+
+case "$TESTINEXT" in
+com ) echo "1";;
+ca ) echo "1";;
+org ) echo "1";;
+net ) echo "1";;
+info ) echo "1";;
+tv ) echo "1";;
+ws ) echo "1";;
+name ) echo "1";;
+biz ) echo "1";;
+mobi ) echo "1";;
+* ) echo "0";;
+esac

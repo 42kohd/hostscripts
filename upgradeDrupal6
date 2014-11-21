@@ -1,0 +1,52 @@
+#!/bin/bash
+
+DRUPAL_URL="http://ftp.drupal.org/files/projects/drupal-6.20.tar.gz"
+
+RANDU=$(cat /dev/urandom | tr -dc 0-9 | head -c6)
+
+DOPATH="/tmp/$RANDU"
+
+if [ $# -ne 1 ]; then
+	echo "usage: upgradeDrupal DIR_TO_DEPLOY_TO"
+	exit
+fi
+
+DIR_TO_DEPLOY_TO=$1
+
+if [ ! -d "$DIR_TO_DEPLOY_TO" ]; then
+	echo "dir not found"
+	exit
+fi
+
+if [ ! -d "$DIR_TO_DEPLOY_TO/sites" ]; then
+	echo "drupal not found"
+	exit
+fi
+
+
+USERDRUPAL=$(echo $DIR_TO_DEPLOY_TO | sed -e 's#/var/www/homes/##g' -e 's#/public_html.*##g')
+
+cd $DIR_TO_DEPLOY_TO
+cd ..
+
+ARCHIVE_DATE=$(date +%Y-%m-%d-%H-%M)
+ARCHIVE_NAME="$USERDRUPAL-$ARCHIVE_DATE.tar.gz"
+
+tar zcfv $ARCHIVE_NAME $DIR_TO_DEPLOY_TO
+
+mkdir -p $DOPATH
+
+cd $DOPATH
+wget -c $DRUPAL_URL
+tar zxvf drupal*
+
+cp -Rv drupal*/* "$DIR_TO_DEPLOY_TO/"
+#cp drupal*/.htaccess "$DIR_TO_DEPLOY_TO/"
+
+chown -R $USERDRUPAL:$USERDRUPAL "$DIR_TO_DEPLOY_TO/"
+
+cd /
+
+rm $DOPATH -rfv
+
+logger -t hostscript "Drupal upgraded in $DIR_TO_DEPLOY_TO"

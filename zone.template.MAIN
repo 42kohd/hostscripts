@@ -1,0 +1,20 @@
+$TTL 30m
+@	IN	SOA	ns1.NAMESERVER.	root.DOMAIN.	(
+	DATE01	; serial
+	1200	; refresh
+	120	; retry
+	1209600	; expire
+	3600	; minimum
+	)
+DOMAIN.	IN	NS	ns1.NAMESERVER.
+DOMAIN.	IN	NS	ns2.NAMESERVER.
+DOMAIN.	IN	NS	ns1.linode.com.
+DOMAIN.	IN	NS	ns2.linode.com.
+DOMAIN.	IN	NS	ns3.linode.com.
+DOMAIN.	IN	NS	ns4.linode.com.
+DOMAIN.		IN	A	IP1
+DOMAIN.		IN	MX	10	mail.DOMAIN.
+www.DOMAIN.	IN	A	IP1
+mail.DOMAIN.	IN	A	IP1
+DOMAIN.		IN	TXT	"v=spf1 a mx ?all"
+mail.DOMAIN.	IN	TXT	"v=spf1 a mx ?all"

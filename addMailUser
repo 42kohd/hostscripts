@@ -1,0 +1,85 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "USAGE: addMailuser.sh EMAIL-ADDRESS"
+	exit 0
+fi
+
+echo "$1" > /tmp/user
+EMAIL=$1
+
+# see if this looks like a real email address
+if [ ! $(echo $EMAIL | grep "@.") ]; then
+	echo "is not an email"
+	exit
+fi
+
+# see if this email was already added to postfix
+if [[ $(cat /etc/postfix/vmaps | grep "$EMAIL") ]]; then
+	echo "email exists"
+	exit
+fi
+
+USERNAME=`cat /tmp/user | cut -f1 -d "@"`
+DOMAIN=`cat /tmp/user | cut -f2 -d "@"`
+PASS=$(/usr/local/bin/mkPasswd)
+
+# check to see if this domain looks valid
+if [ $(/usr/local/bin/isDomain "$DOMAIN") = "0" ];then
+	echo "domain problems"
+	exit
+fi
+
+# let's not add mail for a domain that does not exist...
+if [ ! $(/usr/local/bin/listDomains | grep "$DOMAIN") ]; then
+	echo "domain not found, add it first"
+	exit
+fi
+
+# set up dovecot user
+echo "$USERNAME@$DOMAIN::5000:5000::/var/www/homes/vmail/$DOMAIN/:/bin/false::" >> /etc/dovecot/users
+echo "$1:{PLAIN}$PASS" >> /etc/dovecot/passwd
+
+#Create the needed Maildir directories
+/usr/bin/maildirmake.dovecot /var/www/homes/vmail/$DOMAIN/$USERNAME 5000:5000
+chown 5000:5000 /var/www/homes/vmail/$DOMAIN -R
+
+#To add user to Postfix virtual map file and reload Postfix
+echo "$EMAIL $DOMAIN/$USERNAME/" >> /etc/postfix/vmaps
+postmap /etc/postfix/vmaps
+
+# add domain to postfix so it accepts mail for it - only do it if host does not yet exist
+
+if [[ ! $(cat /etc/postfix/vhosts | grep "$DOMAIN") ]]; then
+	echo "$DOMAIN" >> /etc/postfix/vhosts
+fi
+
+#to receive necessary addresses
+
+if [[ $(cat /etc/postfix/valiases | grep "postmaster@$DOMAIN") ]]; then
+	echo "aliases already exist!"
+else
+	echo "postmaster@$DOMAIN $EMAIL" >> /etc/postfix/valiases
+	echo "abuse@$DOMAIN $EMAIL" >> /etc/postfix/valiases
+	echo "root@$DOMAIN $EMAIL" >> /etc/postfix/valiases
+fi
+
+postmap /etc/postfix/valiases
+
+postfix reload
+
+#echo "new user created"
+echo "email $EMAIL"
+echo "pass $PASS"
+
+echo "
+
+New email account activated:
+
+##############
+user: $EMAIL
+pass: $PASS
+domain: $DOMAIN
+##############
+
+" | mailx -s "new email account $EMAIL activated" zz9plural9zalpha@gmail.com -c root

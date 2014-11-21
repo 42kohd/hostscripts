@@ -1,0 +1,43 @@
+#!/bin/bash
+set -o nounset
+set -o errexit
+
+if [ $# -ne 2 ]; then
+	echo "usage: addAlias NEWDOMAIN MASTERDOMAIN"
+	exit
+fi
+
+VHDOMAIN=$1
+REALACCT=$2
+
+# check to see if this domain looks valid
+if [ $(/usr/local/bin/isDomain "$VHDOMAIN") = "0" ];then
+        echo "domain problems"
+        exit
+fi
+
+if [[ ! $(/usr/local/bin/listDomains | grep "$REALACCT") ]]; then
+	echo "REALACCT not found"
+	exit
+fi
+
+
+/usr/local/bin/addDomain $VHDOMAIN
+
+
+#/usr/local/bin/addWebUser $VHDOMAIN
+# instead of adding a full web user we should simply add a serveralias object to apache sites-available/MASTER
+
+MASTERSITE=$REALACCT
+NEWALIAS=$VHDOMAIN
+
+if [ -f /etc/apache2/sites-available/$MASTERSITE ]; then
+	SERVERALIAS=$(cat /etc/apache2/sites-available/$MASTERSITE | grep ServerAlias)
+	NEWSERVERALIAS="$SERVERALIAS $NEWALIAS www.$NEWALIAS"
+	sed -i "s/$SERVERALIAS/$NEWSERVERALIAS/" /etc/apache2/sites-available/$MASTERSITE
+	/etc/init.d/apache2 force-reload
+else
+	echo "$MASTERSITE not found"
+fi
+
+/usr/local/bin/addMailDomainAlias $VHDOMAIN $REALACCT

@@ -1,0 +1,64 @@
+#!/bin/sh
+
+if [ $# -ne 6 ]; then
+	echo "usage: importMigration USERNAME MYSQLPASSWORD MYSQLDB MYSQLARCHIVE FILESARCHIVE DIR_TO_DEPLOY_TO"
+	exit
+fi
+
+VHUSERNAME=$1
+VHMYSQLPASS=$2
+VHMYSQLDB=$3
+VHMYSQLFILE=$4
+VHFILESFILE=$5
+VHDIR=$6
+
+#################
+# DUMP DBS
+
+ARCHIVE_DATE=$(date +%Y-%m-%d-%H-%M)
+BACKUPDIR="/tmp/migrate/$VHUSERNAME/$ARCHIVE_DATE/"
+
+if [ ! -d "$BACKUPDIR" ]; then
+	mkdir -p "$BACKUPDIR"
+fi
+
+for i in `/usr/bin/mysql --user=$VHUSERNAME --password=$VHMYSQLPASS --batch --skip-column-names -e "show databases" | sed 's/ /%/g'`;do
+	NEWNAME="$i-$ARCHIVE_DATE"
+	nice -n 19 /usr/bin/mysqldump -u $VHUSERNAME -p$VHMYSQLPASS "$i" > "$BACKUPDIR$NEWNAME".sql
+	gzip "$BACKUPDIR$NEWNAME".sql
+done
+
+
+################
+# DROP EXISTING DB
+
+mysqladmin --user="$VHUSERNAME" --pass="$VHMYSQLPASS" drop "$VHMYSQLDB"
+
+################
+# RECREATE DB
+
+mysqladmin --user="$VHUSERNAME" --pass="$VHMYSQLPASS" create "$VHMYSQLDB"
+
+################
+# IMPORT DB
+
+gunzip "$VHMYSQLFILE"
+
+VHNEWMYSQLFILE=$(echo "$VHMYSQLFILE" | sed 's/.gz//g')
+
+mysql --user="$VHUSERNAME" --pass="$VHMYSQLPASS" "$VHMYSQLDB" < "$VHNEWMYSQLFILE"
+
+#################
+# RECREATE PUBLIC_HTML
+
+#HOSTDIR="/var/www/homes/$VHUSERNAME/public_html"
+
+mv "$VHDIR" "$VHDIR-$ARCHIVE_DATE"
+
+mkdir -p "$VHDIR"
+
+tar --extract --verbose --gunzip --file "$VHFILESFILE" -C "$VHDIR" .
+
+chown -R $VHUSER:$VHUSER $VHDIR
+
+echo "backed up current DBs - files are in $BACKUPDIR"

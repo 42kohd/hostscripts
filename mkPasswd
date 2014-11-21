@@ -1,0 +1,5 @@
+#!/bin/bash
+
+PASS=$(head -n15 /dev/urandom | tr -dc A-Z-a-z-0-9)
+
+echo $PASS | sed 's/\-//g' | head -c10

@@ -1,0 +1,42 @@
+<VirtualHost *>
+
+ServerAdmin NAME@DOMAIN
+ServerName DOMAIN
+ServerAlias www.DOMAIN
+
+SuexecUserGroup NAME NAME
+
+DocumentRoot /var/www/homes/NAME/public_html
+
+#PHP_Fix_Pathinfo_Enable 1
+
+#LOGGING
+CustomLog /var/www/homes/NAME/log/access.log combined
+ErrorLog /var/www/homes/NAME/log/error.log
+
+#SECURITY
+ServerSignature Off
+
+#CONTROL OF USERS DIRS
+<Directory /var/www/homes/NAME/public_html/>
+	AddHandler fcgid-script .php
+      	FCGIWrapper /var/www/homes/NAME/bin/php.fcgi .php
+	Options +ExecCGI -Indexes
+	AllowOverride All
+</Directory>
+
+# STATS
+Alias /webstats /var/www/homes/NAME/stats
+<Directory /var/www/homes/NAME/stats>
+	AddHandler fcgid-script .php
+      	FCGIWrapper /var/www/homes/NAME/bin/php.fcgi .php
+	Options +ExecCGI Indexes FollowSymLinks MultiViews
+       	Order allow,deny
+	Allow from all
+	AuthType Basic
+	AuthName "stats"
+	AuthUserFile /var/www/homes/NAME/.htpasswd
+	require valid-user
+</Directory> 
+
+</VirtualHost>

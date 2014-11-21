@@ -1,0 +1,64 @@
+#/bin/bash
+
+if [ $# -ne 2 ]; then
+	echo "USAGE: addMailAlias ALIAS REAL-ADDRESS"
+	exit 0
+fi
+
+ALIAS=$1
+EMAIL=$2
+ADOMAIN=$(echo "$ALIAS" | sed "s/.*@//")
+EDOMAIN=$(echo "$EMAIL" | sed "s/.*@//")
+
+# see if this looks like a real email address
+if [[ ! $(echo $ALIAS | grep "@.") ]]; then
+	echo "alias is not an email"
+	exit
+fi
+if [[ ! $(echo $EMAIL | grep "@.") ]]; then
+	echo "REAL-EMAIL is not an email"
+	exit
+fi
+
+# see if this email was already added to postfix
+if [[ $(cat /etc/postfix/valiases | grep "$ALIAS") ]]; then
+	echo "alias exists"
+	exit
+fi
+
+#make sure real-email exists
+if [[ ! $(cat /etc/postfix/vmaps | grep "$EMAIL") ]]; then
+	echo "REAL-EMAIL does not exist"
+	exit
+fi
+
+# check to see if this domain looks valid
+if [ $(/usr/local/bin/isDomain "$ADOMAIN") = "0" ];then
+	echo "ALIAS domain problems"
+	exit
+fi
+if [ $(/usr/local/bin/isDomain "$EDOMAIN") = "0" ];then
+	echo "REAL-EMAIL domain problems"
+	exit
+fi
+
+# let's not add mail for a domain that does not exist...
+if [[ ! $(/usr/local/bin/listDomains | grep "$ADOMAIN") ]]; then
+	echo "domain not found, add it first"
+	exit
+fi
+if [[ ! $(/usr/local/bin/listDomains | grep "$EDOMAIN") ]]; then
+	echo "domain not found, add it first"
+	exit
+fi
+
+if [ "$ADOMAIN" != "$EDOMAIN" ]; then
+	echo "ALIAS domain must match EMAIL"
+	exit
+fi
+
+
+#To add user to Postfix virtual map file and reload Postfix
+echo "$ALIAS $EMAIL" >> /etc/postfix/valiases
+postmap /etc/postfix/valiases
+postfix reload

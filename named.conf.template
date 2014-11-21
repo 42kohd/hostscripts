@@ -1,0 +1,256 @@
+// @(#)named.conf 02 OCT 2001 Rob Thomas noc@cymru.com
+// Set up our ACLs
+// In BIND 8, ACL names with quotes were treated as different from
+// the same name without quotes. In BIND 9, both are treated as
+// the same.
+// taken from http://www.cymru.com/Documents/secure-bind-template.html
+
+acl "xfer" {
+	// Allow no transfers.  If we have other
+	// name servers, place them here.
+	// the ones below are linode nameservers
+	69.93.127.10;
+	65.19.178.10;
+	75.127.96.10;
+	207.192.70.10;
+	none;
+};
+acl "trusted" {
+	// Place our internal and DMZ subnets in here so that
+	// intranet and DMZ clients may send DNS queries.  This
+	// also prevents outside hosts from using our name server
+	// as a resolver for other domains.
+	localhost; 
+};
+acl "bogon" {
+	// Filter out the bogon networks.  These are networks
+	// listed by IANA as test, RFC1918, Multicast, experi-
+	// mental, etc.  If you see DNS queries or updates with
+	// a source address within these networks, this is likely
+	// of malicious origin. CAUTION: If you are using RFC1918
+	// netblocks on your network, remove those netblocks from
+	// this list of blackhole ACLs!
+	0.0.0.0/8;
+	1.0.0.0/8;
+	2.0.0.0/8;
+	5.0.0.0/8;
+	10.0.0.0/8;
+	14.0.0.0/8;
+	23.0.0.0/8;
+	27.0.0.0/8;
+	31.0.0.0/8;
+	36.0.0.0/8;
+	37.0.0.0/8;
+	39.0.0.0/8;
+	42.0.0.0/8;
+	46.0.0.0/8;
+	49.0.0.0/8;
+	50.0.0.0/8;
+	100.0.0.0/8;
+	101.0.0.0/8;
+	102.0.0.0/8;
+	103.0.0.0/8;
+	104.0.0.0/8;
+	105.0.0.0/8;
+	106.0.0.0/8;
+	107.0.0.0/8;
+	108.0.0.0/8;
+	109.0.0.0/8;
+	110.0.0.0/8;
+	111.0.0.0/8;
+	169.254.0.0/16;
+	172.16.0.0/12;
+	175.0.0.0/8;
+	176.0.0.0/8;
+	177.0.0.0/8;
+	178.0.0.0/8;
+	179.0.0.0/8;
+	180.0.0.0/8;
+	181.0.0.0/8;
+	182.0.0.0/8;
+	183.0.0.0/8;
+	184.0.0.0/8;
+	185.0.0.0/8;
+	192.0.2.0/24;
+	192.168.0.0/16;
+	197.0.0.0/8;
+	198.18.0.0/15;
+	223.0.0.0/8;
+	224.0.0.0/3;
+};
+logging {
+	channel default_syslog {
+		// Send most of the named messages to syslog.
+		syslog local2;
+		severity info;
+	};
+};
+
+// Set options for security
+options {
+
+	forwarders {
+		12.96.160.115;
+		64.5.53.6;
+		216.234.234.30;
+	};
+
+	auth-nxdomain no;    # conform to RFC1035
+
+	listen-on-v6 { none; };
+
+	directory "/etc/bind";
+	pid-file "/var/run/bind/run/named.pid";
+	statistics-file "/var/run/bind/run/named.stats";
+	memstatistics-file "/var/run/bind/run/named.memstats";
+	dump-file "/var/run/bind/run/named.dump";
+	zone-statistics yes;
+	
+	//prevent viewing  of version number
+	version	"[secured]";
+
+	// Prevent DoS attacks by generating bogus zone transfer
+	// requests.  This will result in slower updates to the
+	// slave servers (e.g. they will await the poll interval
+	// before checking for updates).
+
+	// notify linode.com nameservers
+	also-notify { 69.93.127.10; 65.19.178.10; 75.127.96.10; 207.192.70.10; };
+	notify explicit;
+
+	// Generate more efficient zone transfers.  This will place
+	// multiple DNS records in a DNS message, instead of one per
+	// DNS message.
+	transfer-format many-answers;
+
+	// Set the maximum zone transfer time to something more
+	// reasonable.  In this case, we state that any zone transfer
+	// that takes longer than 60 minutes is unlikely to ever
+	// complete.  WARNING:  If you have very large zone files,
+	// adjust this to fit your requirements.
+	max-transfer-time-in 60;
+
+	// We have no dynamic interfaces, so BIND shouldn't need to
+	// poll for interface state {UP|DOWN}.
+	interface-interval 0;
+
+	allow-transfer {
+		// Zone tranfers limited to members of the
+		// "xfer" ACL.
+		xfer;
+	};
+
+	allow-query {
+		// Accept queries from our "trusted" ACL.  We will
+		// allow anyone to query our master zones below.
+		// This prevents us from becoming a free DNS server
+		// to the masses.
+		trusted;
+	};
+
+//	allow-query-cache {
+//		// Accept queries of our cache from our "trusted" ACL. 
+//		trusted;
+//	};
+
+	blackhole {
+		// Deny anything from the bogon networks as
+		// detailed in the "bogon" ACL.
+		bogon;
+	};
+};
+
+view "internal-in" in {
+	// Our internal (trusted) view. We permit the internal networks
+	// to freely access this view. We perform recursion for our
+	// internal hosts, and retrieve data from the cache for them.
+
+	match-clients { trusted; };
+	recursion yes;
+	additional-from-auth yes;
+	additional-from-cache yes;
+
+	zone "." in {
+		// Link in the root server hint file.
+		type hint;
+		file "db.root";
+	};
+
+	zone "localhost" in {
+		type master;
+		file "db.local";
+	};
+
+	zone "0.0.127.in-addr.arpa" in {
+		// Allow queries for the 127/8 network, but not zone transfers.
+		// Every name server, both slave and master, will be a master
+		// for this zone.
+		type master;
+		file "db.127";
+		allow-query {
+			any;
+		};
+		allow-transfer {
+			none;
+		};
+	};
+
+	zone "0.in-addr.arpa" {
+		type master;
+		file "db.0";
+	};
+
+	zone "255.in-addr.arpa" {
+		type master;
+		file "db.255";
+	};
+};
+
+// Create a view for external DNS clients.
+view "external-in" in {
+	// Our external (untrusted) view. We permit any client to access
+	// portions of this view. We do not perform recursion or cache
+	// access for hosts using this view.
+
+	match-clients { any; };
+	recursion no;
+	additional-from-auth no;
+	additional-from-cache no;
+
+	// Link in our zones
+	zone "." in {
+		type hint;
+		file "db.root";
+	};
+
+	zone "DOMAIN" {
+	        type master;
+	        file "/etc/bind/zones/master.DOMAIN.db";
+	        allow-query {
+	                any;
+	        };
+	};
+	### BACK IP1 ###
+	zone "BACKIP1.in-addr.arpa" in {
+		type master;
+		file "zones/rev.BACKIP1.in-addr.arpa";
+
+		allow-query {
+			any;
+		};
+	};
+	### END BACK IP1 ###
+	### BACK IP2 ###
+	zone "BACKIP2.in-addr.arpa" {
+		type master;
+		file "zones/rev.BACKIP2.in-addr.arpa";
+
+		allow-query {
+			any;
+		};
+	};
+	### END BACK IP2 ###
+# bring in our other zones
+include "/etc/bind/zones.rfc1918";
+include "/etc/bind/named.conf.local";
+};

@@ -1,0 +1,515 @@
+#!/bin/bash
+
+#set -o nounset
+#set -o errexit
+
+function valid_ip() {
+	local ip=$1
+	local stat=1
+	if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+		OIFS=$IFS
+		IFS='.'
+		ip=($ip)
+		IFS=$OIFS
+	[[ ${ip[0]} -le 255 && ${ip[1]} -le 255 && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+		stat=$?
+	fi
+if [ "$stat" == 0 ]; then
+	echo "0"
+fi
+}
+
+function strip_ip() {
+	echo $1 | sed -e 's/[ \t]//g' -e 's/[a-z]//g' -e 's/[A-Z]//g'
+}
+
+# in my setup we have a seperate dir mounted at /var/www/homes for user data
+if [[ ! $(mount | grep /var/www/homes) ]]; then
+	mount
+	read -p "Did you fix fstab for /var/www/homes dir yet? : " MOUNTED
+		if [ $MOUNTED != "y" ]; then
+			read -p "want me to insert fstab stanza? : " INSERTSTANZA
+				if [ $INSERTSTANZA == "y" ]; then
+					read -p "what is disk label (/dev/sdaX)? : " DISKLABEL
+					echo "$DISKLABEL /var/www/homes ext3 defaults 0 1" >> /etc/fstab
+					mkdir -p /var/www/homes
+					mount -a
+				else
+					mount -a
+				fi
+		fi
+fi
+
+#change ssh port
+if [[ $(cat /etc/ssh/sshd_config | grep "Port 22") ]]; then
+	sed -i 's/Port 22/Port 10022/g' /etc/ssh/sshd_config
+	/etc/init.d/ssh restart
+else
+	echo "ssh port already changed!"
+fi
+
+# install ssh keys
+if [[ $(cat /root/.ssh/authorized_keys) ]]; then
+	echo "keys already installed, empty authorized_keys"
+	read -p "is this your key? : " YOURKEY
+	if [ $YOURKEY != "y" ]; then
+		exit
+	fi
+else
+	read -p "paste your id*.pub here for ssh keys:          " SSHKEY
+	if [ "$SSHKEY" ];then
+		if [ ! -d /root/.ssh ]; then
+			mkdir /root/.ssh
+		fi
+
+		if [ ! -f /root/.ssh/authorized_keys ]; then
+			touch /root/.ssh/authorized_keys
+		fi
+
+		if [[ $(cat /root/.ssh/authorized_keys | grep "$SSHKEY") ]]; then
+			echo "key exists!"
+		else
+			echo "$SSHKEY" >> /root/.ssh/authorized_keys
+		fi
+	else
+		echo "key not found"
+		exit
+	fi
+fi
+
+# fix timezone
+ln -sf /usr/share/zoneinfo/Canada/Eastern /etc/localtime
+
+# try and figure out which IPs are being used now in case the script is being re-run or if this was done manually
+NOWIP1=$(cat /etc/network/interfaces | grep address | sed -e 's/^[ \t]*//' -e 's/[a-z]//g' -e 's/ //g' | head -n1)
+NOWIP2=$(cat /etc/network/interfaces | grep address | sed -e 's/^[ \t]*//' -e 's/[a-z]//g' -e 's/ //g' | tail -n1)
+
+# let's see what the user thinks
+read -p "Is $NOWIP1 and $NOWIP2 the correct IPs? : " NOWIPOK
+
+IPSDONE=0
+
+if [ $NOWIPOK != "y" ]; then
+	read -p "First primary IP to be used: " IPINPUT1
+	read -p "Second primary IP to be used: " IPINPUT2
+	read -p "Gateway for IP1 : " GWINPUT1
+	read -p "Gateway for IP2 : " GWINPUT2
+	IPADDRESS1=$(strip_ip $IPINPUT1)
+	IPADDRESS2=$(strip_ip $IPINPUT2)
+	GW1=$(strip_ip $GWINPUT1)
+	GW2=$(strip_ip $GWINPUT2)
+	GWOK1=$(valid_ip $GW1)
+	GWOK2=$(valid_ip $GW2)
+
+	# we can't set two gateways to same place
+	if [ $GW1 == $GW2 ]; then
+		GW1="gateway $GW1"
+		GW2=""
+	else
+		GW1="gateway $GW1"
+		GW2="gateway $GW2"
+	fi
+
+else
+	IPADDRESS1=$NOWIP1
+	IPADDRESS2=$NOWIP2
+	GWOK1=0
+	GWOK2=0
+  # set a flag for later
+	IPSDONE=1
+fi
+
+# check validity
+IPOK1=$(valid_ip $IPADDRESS1)
+IPOK2=$(valid_ip $IPADDRESS2)
+
+# all output from checker programs should be 0
+if [[ "$IPOK1" -eq 0 && "$IPOK2" -eq 0 && "$GWOK1" -eq 0 && "$GWOK2" -eq 0 ]]; then
+	echo "IPs validated"
+else
+	echo "IP problem"
+	exit
+fi
+
+if [ $IPADDRESS1 == $IPADDRESS2 ]; then
+	IP1="address $IPADDRESS1"
+	IP2=""
+else
+	IP1="address $IPADDRESS1"
+	IP2="address $IPADDRESS2"
+fi
+
+# the flag we set earlier
+if [[ "$IPSDONE" != 1 ]];then
+read -p "Should I setup IPs? Reboot required : " SETUPIP
+	if [ "$SETUPIP" == "y" ]; then
+		cp /usr/local/bin/network.interfaces.template /etc/network/interfaces
+		# replace IPs in the file
+		sed -i -e "s/IP1/$IP1/g" -e "s/IP2/$IP2/g" -e "s/GW1/$GW1/g" -e "s/GW2/$GW2/g" /etc/network/interfaces
+
+		# if only using one IP, delete entire IP2 stanza
+		if [ $IPADDRESS1 == $IPADDRESS2 ]; then
+			sed -i "/### IP 2 ###/,/### END IP 2 ###/d" /etc/network/interfaces
+		fi
+
+		echo "reboot now"
+		exit
+	fi
+fi
+
+#######
+# HOSTNAME
+#
+read -p "is $(hostname -f) a correct hostname for you?: " HOSTOK
+if [ "$HOSTOK" != "y" ]; then
+	read -p "what hostname to use (my.domain.com)?: " FULLDOMAIN
+	NEWHOSTNAME=$(echo $FULLDOMAIN | sed "s/\..*//g")
+	NEWDOMAIN=$(echo $FULLDOMAIN | sed 's/^[a-zA-Z]*\.//')
+	#NEWDOMAIN=$(echo $FULLDOMAIN | cut -d '.' -f2,3)
+	echo "new hostname is $NEWHOSTNAME"
+	echo "new domain name is $NEWDOMAIN"
+	echo "full domain is $FULLDOMAIN"
+	echo "$NEWHOSTNAME" > /etc/hostname
+	echo "127.0.1.1 $FULLDOMAIN $NEWDOMAIN $NEWHOSTNAME
+127.0.0.1 localhost localhost.localdomain" > /etc/hosts
+	echo "ok, reboot now"
+	exit
+else
+	NEWHOSTNAME=$(hostname)
+	NEWDOMAIN=$(hostname -f | cut -d '.' -f2,3)
+	FULLDOMAIN=$(hostname -f)
+	read -p "using NEWHOSTNAME=$NEWHOSTNAME NEWDOMAIN=$NEWDOMAIN FULLDOMAIN=$FULLDOMAIN, ok? : " HOSTOK
+	if [ $HOSTOK != "y" ]; then
+		exit
+	fi
+fi
+
+
+#########
+# FIREWALL
+#
+apt-get install firehol -y
+cp /usr/local/bin/firehol.conf.template /etc/firehol/firehol.conf
+sed -i "s/START_FIREHOL=NO/START_FIREHOL=YES/g" /etc/default/firehol
+echo "firewall installed, but not started, please test it.. it will start on next boot"
+
+#updates reserved IP list
+get-iana
+
+##########
+# /etc/skel
+#
+echo "fixing /etc/skel"
+
+mkdir -p /etc/skel/log
+mkdir -p /etc/skel/stats/visitors
+mkdir -p /etc/skel/stats/webalizer
+mkdir -p /etc/skel/stats/awstats
+mkdir -p /etc/skel/public_html
+mkdir -p /etc/skel/bin
+mkdir -p /etc/skel/conf
+
+cd /etc/skel
+ln -sf /etc/skel/public_html www
+cd -
+
+touch /etc/skel/log/access.log
+touch /etc/skel/log/error.log
+
+touch /etc/skel/.htpasswd
+
+echo "/etc/skel done"
+
+
+#############
+# FCGID
+#
+echo "#!/bin/sh
+PHPRC="/var/www/homes/NAME/conf/"
+export PHPRC
+#PHP_FCGI_CHILDREN=4
+#export PHP_FCGI_CHILDREN
+#PHP_FCGI_MAX_REQUESTS=200
+#export PHP_FCGI_MAX_REQUESTS
+exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
+
+chmod 755 /etc/skel/bin/php.fcgi
+
+cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
+
+
+##########
+# POSTFIX/DOVECOT
+#
+echo "mail server time - choose no configuration if it asks for postfix"
+sleep 2
+aptitude install postfix -y
+aptitude install dovecot-imapd dovecot-pop3d -y
+
+# where mail is stored
+groupadd -g 5000 vmail
+useradd -u 5000 -g vmail -d /var/www/homes/vmail -s /bin/bash vmail
+mkdir -p /var/www/homes/vmail
+chown vmail:vmail /var/www/homes/vmail -R
+
+# dovecot
+touch /etc/dovecot/users
+touch /etc/dovecot/passwd
+cp /usr/local/bin/dovecot.conf.template /etc/dovecot/dovecot.conf
+
+# postfix files
+touch /etc/postfix/vmaps
+touch /etc/postfix/valiases
+#touch /etc/postfix/vmail
+touch /etc/postfix/vhosts
+cp /usr/local/bin/postfix.main.cf.template /etc/postfix/main.cf
+cp /usr/local/bin/postfix.master.cf.template /etc/postfix/master.cf
+sed -i "s/MAILNAME/$FULLDOMAIN/g" /etc/postfix/main.cf
+
+postmap /etc/postfix/vmaps
+postmap /etc/postfix/valiases
+
+echo "root:$NEWHOSTNAME@$NEWDOMAIN
+postmaster:root
+" > /etc/aliases
+newaliases
+
+/etc/init.d/postfix start
+cat /var/log/mail.info
+
+sleep 2
+
+echo "postfix and dovecot installed"
+
+###########
+# spamassassin
+#
+aptitude install spamassassin -y
+
+cp /usr/local/bin/spamassassin.local.cf.template /etc/spamassassin/local.cf
+cp /usr/local/bin/spamassassin.default.conf.template /etc/default/spamassassin
+
+mkdir -p /var/lib/spamassassin
+
+groupadd spamd --gid 4001
+useradd --uid 4001 --gid 4001 -d /var/lib/spamassassin -s /bin/nologin spamd
+
+chown 4001:4001 /var/lib/spamassassin* -Rv
+
+sa-update
+
+###############
+# proftpd
+##############
+aptitude install proftpd -y
+cp /usr/local/bin/proftpd.conf.template /etc/proftpd/proftpd.conf
+/etc/init.d/proftpd restart
+
+#############
+# APACHE2
+#
+aptitude install apache2 php5 php5-cli php-pear php5-mysql php5-suhosin libapache2-mod-fcgid php5-gd php5-mcrypt imagemagick php5-cgi apache2-suexec php5-curl php5-imagick -y
+a2enmod rewrite
+a2enmod ssl
+a2enmod fcgid
+a2enmod suexec
+a2enmod actions
+echo "Listen 80
+Listen 443" > /etc/apache2/ports.conf
+cp /usr/local/bin/apache.mods-available.fcgid.conf.template /etc/apache2/mods-available/fcgid.conf
+#cp -v /usr/local/bin/php.ini.template /etc/php5/apache2/php.ini
+/etc/init.d/apache2 force-reload
+
+############
+# STATISTICS
+#
+#aptitude install visitors graphviz libnet-xwhois-perl webalizer awstats -y
+
+#rm /etc/cron.d/awstats -v
+
+#cd /etc/webalizer
+#wget http://archive.mgm51.com/mirrors/webalizer-files/geodb/geodb-latest.tgz
+#tar zxvf geodb-latest.tgz
+
+#cd /usr/local/bin
+#tar zxvf webalizer-flags.tgz
+#mv flags/ /etc/skel/stats/webalizer
+
+##############
+# MYSQL
+#
+
+MYSQL_PASS=$(/usr/local/bin/mkPasswd)
+
+echo "If asked, please use $MYSQL_PASS for the password (hit enter after copying the password)"
+
+read -e
+
+aptitude install mysql-server -y
+#mysqladmin -u root password "$MYSQL_PASS"
+
+# we need to install the root mysql pass in files so they can add/delete user
+cp /usr/local/bin/addMysqlUser.template /usr/local/bin/addMysqlUser
+sed -i "s/MYSQL_ROOT='#'/MYSQL_ROOT=\"$MYSQL_PASS\"/g" /usr/local/bin/addMysqlUser
+
+cp /usr/local/bin/addUser.MAIN /usr/local/bin/addUser
+sed -i "s/MYSQL_ROOT='#'/MYSQL_ROOT=\"$MYSQL_PASS\"/g" /usr/local/bin/addUser
+
+##############
+# phpmyadmin
+#
+#cp /usr/local/bin/apache.default.template /etc/apache2/sites-available/default
+#aptitude install phpmyadmin -y
+
+###################
+# Logcheck
+#
+aptitude install logcheck -y
+cp /usr/local/bin/logcheck.cron.template /etc/cron.d/logcheck
+chown logcheck:logcheck /var/lock/logcheck -Rv
+
+###################
+# MUNIN
+#
+#aptitude install munin -y
+#cp /usr/local/bin/munin.conf.template /etc/munin/munin.conf
+#cp /usr/local/bin/munin-node.conf.template /etc/munin/munin-node.conf
+#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin.conf
+#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin-node.conf
+
+# kill unneeded plugins
+#rm /etc/munin/plugins/nfs*
+
+
+##################
+# MONIT
+#
+
+# took this out since it is basically never used
+
+#aptitude install monit -y
+#cp /usr/local/bin/monitrc.template /etc/monit/monitrc
+#touch /etc/monit/not_configured
+#mkdir -p /var/www/monit
+#echo "token" > /var/www/monit/token
+
+
+###################
+# LIGHTTPD
+#
+# we install this for phpmyadmin ... it is bound to localhost on port 81
+#aptitude install lighttpd -y
+#sed -i 's/php4/php5/' /etc/lighttpd/conf-available/10-fastcgi.conf
+#cp /usr/local/bin/lighttpd.conf.template /etc/lighttpd/lighttpd.conf
+#lighty-enable-mod fastcgi
+#/etc/init.d/lighttpd force-reload
+#mkdir -v /var/www/lighty
+#cp -Rv /usr/share/phpmyadmin /var/www/lighty
+#chown www-data:www-data /var/www/lighty -Rv
+
+#stupid hack to fix apt
+#aptitude remove lighttpd
+#aptitude install lighttpd
+
+# random fix shat
+#chmod +x /usr/local/bin/addUser
+#chmod +x /usr/local/bin/addMysqlUser
+
+
+##############
+# BIND9
+#
+apt-get install bind9 dnsutils -y
+/etc/init.d/bind9 stop
+
+# chroot BIND
+echo 'OPTIONS="-u bind -t /var/lib/named"
+RESOLVCONF=yes' > /etc/default/bind9
+mkdir -p /var/lib/named/etc
+mkdir /var/lib/named/dev
+mkdir -p /var/lib/named/var/cache/bind
+mkdir -p /var/lib/named/var/run/bind/run
+mkdir -p /var/lib/named/var/log
+#touch /var/lib/named/var/log/named.log
+mv /etc/bind /var/lib/named/etc
+ln -s /var/lib/named/etc/bind /etc/bind
+mknod /var/lib/named/dev/null c 1 3
+mknod /var/lib/named/dev/random c 1 8
+chmod 666 /var/lib/named/dev/null /var/lib/named/dev/random
+chown -R bind:bind /var/lib/named/var/*
+chown -R bind:bind /var/lib/named/etc/bind
+echo 'SYSLOGD="-a /var/lib/named/dev/log"' > /etc/default/syslogd
+/etc/init.d/sysklogd restart
+# chroot done
+
+
+mkdir -p /etc/bind/zones
+
+# for updating serial in zones
+DATENOW=$(date +%Y%m%d)
+
+# install necessary bind files
+cp /usr/local/bin/named.conf.template /etc/bind/named.conf
+cp /usr/local/bin/named.conf.local.template /etc/bind/named.conf.local
+
+# flip those IPs
+BACKIP1=$(echo "$IPADDRESS1" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
+BACKIP2=$(echo "$IPADDRESS2" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
+
+# check if on same zone
+if [ $BACKIP1 != $BACKIP2 ];then
+	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "s/BACKIP2/$BACKIP2/g" /etc/bind/named.conf
+	# reverse zone files
+	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
+	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
+	-e "s/FULLDOM/$FULLDOMAIN/g" \
+	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
+	-e "s/FULLDOM/$FULLDOMAIN/g" \
+	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
+else
+	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "/### BACK IP2 ###/,/### END BACK IP2 ###/d" /etc/bind/named.conf
+	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
+	-e "s/FULLDOM/$FULLDOMAIN/g" \
+	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+fi	
+
+# need to insert nameservers standard to whole domain
+cp -v /usr/local/bin/master.zone.db.template.MAIN /usr/local/bin/master.zone.db.template
+sed -i "s/NAMESERVER/$NEWDOMAIN/g" /usr/local/bin/master.zone.db.template
+
+# now install the zone template with good nameservers
+cp -v /usr/local/bin/master.zone.db.template "/etc/bind/zones/master.$NEWDOMAIN.db"
+
+sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
+-e "s/FULLDOM/$FULLDOMAIN/g" \
+-e "s/IP1/$IPADDRESS1/g" \
+-e "s/DATE/$DATENOW/g" \
+-e "s/IP2/$IPADDRESS2/g" "/etc/bind/zones/master.$NEWDOMAIN.db"
+# done with setting up main domain
+
+#fix regular domain zone template
+cp /usr/local/bin/zone.template.MAIN /usr/local/bin/zone.template
+sed -i -e "s/NAMESERVER/$NEWDOMAIN/g" \
+-e "s/IP1/$IPADDRESS1/g" /usr/local/bin/zone.template
+
+
+# fix resolv.conf
+
+echo "nameserver 127.0.0.1" > /etc/resolv.conf
+
+/etc/init.d/bind9 start
+
+
+
+
+
+
+
+
+echo "1) FIX FORWARDERS IN BIND/NAMED.CONF"
+echo "2) do /usr/local/bin/addUser $NEWDOMAIN"
+echo "3) do addMailAlias host.$VHDOMAIN"
+echo "4) reboot"

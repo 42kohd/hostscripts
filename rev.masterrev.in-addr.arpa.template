@@ -1,0 +1,11 @@
+$TTL 30m
+@	IN	SOA	ns1.DOMAIN.	root.DOMAIN. (
+	DATE01	; Serial
+	30m	; Refresh
+	1h	; Retry
+	1w	; Expire
+	1h	; Negative caching TTL
+	)
+@	IN	NS	ns1.DOMAIN.
+@	IN	NS	ns2.DOMAIN.
+27	IN	PTR	FULLDOM.

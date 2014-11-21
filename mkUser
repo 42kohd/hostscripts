@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#if [ /dev/stdin ];then
+#UNAME=$1
+#fi
+
+#if [ $UNAME = "" ]; then
+UNAME=$1
+#fi
+
+#if [ $UNAME != "" ]; then
+NAMENUM=${#UNAME}
+	if [ "$NAMENUM" -gt 2 ]; then
+		RANDU=$(cat /dev/urandom | tr -dc 0-9 | head -c6)
+		USERNAME=$(echo $UNAME | sed -e 's/\..*//g' -e 's/-//g' | tr -dc _A-Z-a-z-0-9 | head -c8)
+		NEWUSERNAME=`echo $USERNAME$RANDU | head -c10`
+		if [ `grep "^${NEWUSERNAME}:" /etc/passwd` ];then
+			echo "username taken"
+			exit
+		else
+			echo $NEWUSERNAME
+		fi
+
+	else
+		echo "too few chars"
+		exit
+	fi
+#else
+#	echo "too few chars"
+#	exit
+#fi

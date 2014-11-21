@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+	echo "usage: addWebalizer USER DOMAIN"
+	exit
+fi
+
+VHNAME=$1
+VHDOMAIN=$2
+
+if [ $(/usr/local/bin/isDomain "$VHDOMAIN") = "0" ];then
+	echo "domain problems"
+	exit
+fi
+
+
+###########
+# WEBALIZER
+#
+cp /usr/local/bin/webalizer.conf.template /etc/webalizer/$VHDOMAIN.webalizer.conf
+sed -i -e "s/USERNAME/$VHNAME/g" -e "s/DOMAINNAME/$VHDOMAIN/g" /etc/webalizer/$VHDOMAIN.webalizer.conf
+
+echo "done"

@@ -1,0 +1,65 @@
+#!/bin/bash
+
+DRUPAL_URL="http://ftp.drupal.org/files/projects/drupal-6.22.tar.gz"
+#DRUPAL_URL="http://ftp.drupal.org/files/projects/drupal-7.0.tar.gz"
+
+RANDU=$(cat /dev/urandom | tr -dc 0-9 | head -c6)
+
+DOPATH="/tmp/$RANDU"
+
+
+if [ $# -ne 2 ]; then
+	echo "usage: deployDrupal DOMAIN DIR_TO_DEPLOY_TO"
+	exit
+fi
+
+DIR_TO_DEPLOY_TO=$2
+DOMAIN=$1
+
+if [ ! -d "$DIR_TO_DEPLOY_TO" ]; then
+	echo "dir not found"
+	exit
+fi
+
+if [[ ! $(echo $DIR_TO_DEPLOY_TO | grep "public_html") ]]; then
+	echo "this is not a public_html dir"
+	exit
+fi
+
+if [ -d "$DIR_TO_DEPLOY_TO/sites" ]; then
+	echo "lookslike drupal is already installed"
+	exit
+fi
+
+USERDRUPAL=$(echo $DIR_TO_DEPLOY_TO | sed -e 's#/var/www/homes/##g' -e 's#/public_html.*##g')
+
+mkdir $DOPATH
+
+cd $DOPATH
+wget -c $DRUPAL_URL
+tar zxvf drupal*
+
+cd drupal*/sites/default
+
+cp default.settings.php settings.php
+
+cd $DOPATH
+
+cp -Rv drupal*/* "$DIR_TO_DEPLOY_TO/"
+cp drupal*/.htaccess "$DIR_TO_DEPLOY_TO/"
+
+chown -Rv "$USERDRUPAL:$USERDRUPAL" "$DIR_TO_DEPLOY_TO/"
+
+cd /
+
+rm $DOPATH -rfv
+
+wget 'http://ftp.drupal.org/files/projects/drush-7.x-4.5.tar.gz'
+tar zxvf drush-*
+mkdir -p "$DIR_TO_DEPLOY_TO/sites/all/modules"
+cp -Rv drush "$DIR_TO_DEPLOY_TO/sites/all/modules"
+rm -rfv drush*
+
+#echo "alias drush$USERDRUPAL=\"cd $DIR_TO_DEPLOY_TO && php5 sites/all/modules/drush/drush.php -l http://$DOMAIN\"" >> /root/.bashrc
+
+logger -t hostscript "Drupal deployed in $DIR_TO_DEPLOY_TO"

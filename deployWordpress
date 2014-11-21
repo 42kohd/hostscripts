@@ -1,0 +1,49 @@
+#!/bin/bash
+
+WP_URL="http://wordpress.org/latest.tar.gz"
+
+RANDU=$(cat /dev/urandom | tr -dc 0-9 | head -c6)
+
+DOPATH="/tmp/$RANDU"
+
+
+if [ $# -ne 2 ]; then
+	echo "usage: deployWordpress DOMAIN DIR_TO_DEPLOY_TO"
+	exit
+fi
+
+DIR_TO_DEPLOY_TO=$2
+DOMAIN=$1
+
+if [ ! -d "$DIR_TO_DEPLOY_TO" ]; then
+	echo "dir not found"
+	exit
+fi
+
+if [[ ! $(echo $DIR_TO_DEPLOY_TO | grep "public_html") ]]; then
+	echo "this is not a public_html dir"
+	exit
+fi
+
+#if [ -d "$DIR_TO_DEPLOY_TO/sites" ]; then
+#	echo "looks like drupal is already installed"
+#	exit
+#fi
+
+USERDRUPAL=$(echo $DIR_TO_DEPLOY_TO | sed -e 's#/var/www/homes/##g' -e 's#/public_html.*##g')
+
+mkdir $DOPATH
+
+cd $DOPATH
+wget -c $WP_URL
+tar zxvf latest.tar.gz
+
+cp -Rv wordpress/* "$DIR_TO_DEPLOY_TO/"
+
+chown -Rv "$USERDRUPAL:$USERDRUPAL" "$DIR_TO_DEPLOY_TO/"
+
+cd /
+
+rm $DOPATH -rfv
+
+logger -t hostscript "Wordpress deployed in $DIR_TO_DEPLOY_TO"

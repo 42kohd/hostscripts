@@ -1,0 +1,44 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "usage: addDomain DOMAIN"
+	exit
+fi
+
+VHDOMAIN=$1
+#echo $VHDOMAIN
+
+# check to see if this domain looks valid
+if [ $(/usr/local/bin/isDomain "$VHDOMAIN") = "0" ];then
+        echo "domain problems"
+        exit
+fi
+
+# let's not add a domain that does already exists
+if [ $(/usr/local/bin/listDomains | grep "$VHDOMAIN") ]; then
+	echo "domain already active"
+	exit
+fi
+
+
+cat /usr/local/bin/zone.template | sed -e "s/DOMAIN/$VHDOMAIN/g" -e "s/DATE/`date +%Y%m%d`/g" > "/etc/bind/zones/master.$VHDOMAIN.db"
+
+echo "
+### $VHDOMAIN ZONE START ###
+zone \"$VHDOMAIN\" {
+	type master;
+	file \"/etc/bind/zones/master.$VHDOMAIN.db\";
+	allow-query {
+		any;
+	};
+};
+### ZONE END ###
+" >> /etc/bind/named.conf.local
+
+/etc/init.d/bind9 restart
+
+# there really should be an email address for each domain, if only for root@ postmaster@ aliases... let's remind user
+
+if [[ ! $(/usr/local/bin/listMailUsers | grep "$VHDOMAIN") ]]; then
+	echo "need to make mail account"
+fi

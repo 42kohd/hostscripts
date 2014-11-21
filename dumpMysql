@@ -1,0 +1,30 @@
+#!/bin/sh
+
+if [ $# -ne 2 ]; then
+	echo "USAGE: dumpMysql PASS USER"
+	exit 0
+fi
+
+PASS=$1
+USER=$2
+BACKUPDIR="/var/www/homes/sqlbackups/"
+
+
+if [ ! -d "$BACKUPDIR" ]; then
+	mkdir "$BACKUPDIR"
+fi
+
+ARCHIVE_DATE=$(date +%Y-%m-%d-%H-%M)
+
+for i in `/usr/bin/mysql --user=$USER --password=$PASS --batch --skip-column-names -e "show databases" | sed 's/ /%/g'`;do
+
+NEWNAME="$i-$ARCHIVE_DATE"
+
+nice -n 19 /usr/bin/mysqldump -u $USER -p$PASS "$i" > "$BACKUPDIR$NEWNAME".sql
+
+gzip "$BACKUPDIR$NEWNAME".sql
+
+done
+
+rm "$BACKUPDIR"mysql-*
+rm "$BACKUPDIR"information_*

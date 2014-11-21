@@ -1,0 +1,17 @@
+/var/www/homes/USERNAME/log/access.log {
+	daily
+	missingok
+	rotate 360
+	compress
+	delaycompress
+	notifempty
+	create 777 USERNAME USERNAME
+	prerotate
+		visitors -A --prefix http://www.DOMAIN /var/www/homes/USERNAME/log/access.log > /var/www/homes/USERNAME/stats/visitors/visitors-daily-`date +%Y%m%d%H%M`.html
+		visitors -A -o text --prefix http://www.DOMAIN /var/www/homes/USERNAME/log/access.log | mailx -s "report for DOMAIN for $(date "+%Y.%m.%d %H:%M")" root
+		webalizer -c /etc/webalizer/DOMAIN.webalizer.conf /var/www/homes/USERNAME/log/access.log
+		/usr/lib/cgi-bin/awstats.pl -update -config=DOMAIN
+		/usr/local/bin/awstats_buildstaticpages.pl -awstatsprog=/usr/lib/cgi-bin/awstats.pl -config=DOMAIN -dir=/var/www/homes/USERNAME/stats/awstats/		
+		/etc/init.d/apache2 reload
+	endscript
+}

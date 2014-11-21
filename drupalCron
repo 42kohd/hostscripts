@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "usage: drupalCron http://PATH-TO-CRON.php ( don't include http:// )"
+	exit
+fi
+
+CRONPATH=$1
+
+if [ ! -f /etc/cron.daily/drupal ]; then
+echo "#!/bin/bash
+" > /etc/cron.daily/drupal
+chmod 755 /etc/cron.daily/drupal
+fi
+
+echo "/usr/bin/wget -q -O - http://$CRONPATH" >> /etc/cron.daily/drupal

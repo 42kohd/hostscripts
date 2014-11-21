@@ -1,0 +1,44 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "USAGE: delMailuser EMAIL-ADDRESS"
+	exit 0
+fi
+
+echo "$1" > /tmp/user
+USERNAME=`cat /tmp/user | cut -f1 -d "@"`
+DOMAIN=`cat /tmp/user | cut -f2 -d "@"`
+EMAIL=$1
+
+if [[ ! $(cat /etc/postfix/vmaps | grep "$EMAIL") ]]; then
+	echo "email not found"
+	exit
+fi
+
+read -p "confirm? : " OK
+if [ ! "$OK" = "y" ]; then
+	exit
+fi
+
+sed -i "/$EMAIL/d" /etc/dovecot/users
+sed -i "/$EMAIL/d" /etc/dovecot/passwd
+
+sed -i "/$EMAIL/d" /etc/postfix/vmaps
+sed -i "/$EMAIL/d" /etc/postfix/valiases
+
+postmap /etc/postfix/vmaps
+postfix reload
+
+rm -rfv /var/www/homes/vmail/$DOMAIN/$USERNAME
+
+# if this was last email for domain, delete aliases for it
+if [[ ! $(cat /etc/postfix/vmaps | grep "$DOMAIN") ]]; then
+	sed -i -e "/$DOMAIN/d" -e '/^$/d' /etc/postfix/valiases
+	sed -i "/$DOMAIN/d" /etc/postfix/vhosts
+fi
+
+#is vmail dir empty for this user?
+if [ -z "`ls /var/www/homes/vmail/$DOMAIN`" ]; then
+	rm -rfv "/var/www/homes/vmail/$DOMAIN"
+fi
+

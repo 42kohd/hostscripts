@@ -1,0 +1,47 @@
+#/bin/bash
+
+if [ $# -ne 2 ]; then
+	echo "USAGE: addMailDomainAlias ALIASDOMAIN REALDOMAIN"
+	exit 0
+fi
+
+ALIASDOMAIN=$1
+REALDOMAIN=$2
+
+# see if domains are sane
+if [ $(/usr/local/bin/isDomain $ALIASDOMAIN) != "1" ]; then
+	echo "alias is not an email"
+	exit
+fi
+if [ $(/usr/local/bin/isDomain $REALDOMAIN) != "1" ]; then
+	echo "REALDOMAIN is not an email"
+	exit
+fi
+
+# see if this email was already added to postfix
+if [[ $(cat /etc/postfix/valiases | grep "$ALIASDOMAIN") ]]; then
+	echo "alias exists"
+	exit
+fi
+
+#make sure real-email exists
+if [[ ! $(cat /etc/postfix/vmaps | grep "$REALDOMAIN") ]]; then
+	echo "REAL-EMAIL does not exist"
+	exit
+fi
+
+# let's not add mail for a domain that does not exist...
+if [[ ! $(/usr/local/bin/listDomains | grep "$ALIASDOMAIN") ]]; then
+	echo "ALIAS domain not found, add it first"
+	exit
+fi
+if [[ ! $(/usr/local/bin/listDomains | grep "$REALDOMAIN") ]]; then
+	echo "REAL domain not found, add it first"
+	exit
+fi
+
+echo "@$ALIASDOMAIN @$REALDOMAIN" >> /etc/postfix/valiases
+echo "$ALIASDOMAIN" >> /etc/postfix/vhosts
+
+postmap /etc/postfix/valiases
+/etc/init.d/postfix reload

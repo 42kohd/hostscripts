@@ -1,0 +1,5 @@
+LogFile="/var/www/homes/USERNAME/log/access.log"
+LogFormat = 1
+SiteDomain="DOMAIN"
+HostAliases="www.DOMAIN"
+DirData="/var/www/homes/USERNAME/conf"

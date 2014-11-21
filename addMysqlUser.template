@@ -1,0 +1,16 @@
+#!/bin/bash
+
+MYSQL_ROOT='#'
+
+if [ $# -ne 2 ]; then
+	echo "usage: addMysqlUser USERNAME PASSWORD"
+	exit
+fi
+
+USERNAME=$1
+PASSWORD=$2
+
+echo "CREATE USER '$USERNAME'@'localhost' IDENTIFIED BY '$PASSWORD';
+GRANT ALL PRIVILEGES ON \`"$USERNAME"_%\`.* TO '$USERNAME'@'localhost';" > /tmp/setup.sql
+
+mysql -uroot -p$MYSQL_ROOT < /tmp/setup.sql || echo "Could not set up database.  Is your root password correct?"

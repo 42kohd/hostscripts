@@ -1,0 +1,9 @@
+#!/bin/bash
+
+cat /etc/bind/named.conf.local /etc/bind/named.conf | \
+grep "zone.*.{" | \
+sed -e '/.*in-addr.arpa/d' \
+-e 's/zone "//g' -e 's/".*//g' \
+-e '/localhost/d' -e '/^ .*\./d' \
+-e '/[a-z]/!d' -e 's/^[ \t]*//' | \
+sort

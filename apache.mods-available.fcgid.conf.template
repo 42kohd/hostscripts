@@ -1,0 +1,20 @@
+<IfModule mod_fcgid.c>
+AddHandler fcgid-script .fcgi
+SocketPath /var/lib/apache2/fcgid/sock
+IPCConnectTimeout 60
+IPCCommTimeout 60
+IdleTimeout 240
+IdleScanInterval 60
+PHP_Fix_Pathinfo_Enable 1
+#MaxRequestsPerProcess 500
+MaxProcessCount	256
+BusyTimeout 300
+BusyScanInterval 120
+ErrorScanInterval 9
+ZombieScanInterval 9
+ProcessLifeTime	7200
+SpawnScoreUpLimit 15
+SpawnScore 1
+TerminationScore 2
+</IfModule>
+

@@ -1,0 +1,253 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "usage: addUser DOMAIN"
+	exit
+fi
+
+VHDOMAIN=$1
+
+if [ $(/usr/local/bin/isDomain "$VHDOMAIN") = "0" ];then
+  echo "domain problems"
+  exit
+fi
+
+VHNAME=$(/usr/local/bin/mkUser $VHDOMAIN)
+VHPASS=$(/usr/local/bin/mkPasswd)
+
+# make a password for email
+EMAILPASS=$(/usr/local/bin/mkPasswd)
+MYSQLPASS=$(/usr/local/bin/mkPasswd)
+STATSPASS=$(/usr/local/bin/mkPasswd)
+
+#####################
+# BIND9 SETUP
+#####################
+
+
+NOWDOMAIN=$(hostname -f | cut -d '.' -f2,3)
+
+# let's not add a domain that does already exists
+
+if [ $(/usr/local/bin/listDomains | grep "$VHDOMAIN") ]; then
+	echo "domain already active"
+else
+
+cp -iv /usr/local/bin/zone.template "/etc/bind/zones/master.$VHDOMAIN.db"
+sed -i -e "s/DOMAIN/$VHDOMAIN/g" -e "s/DATE/`date +%Y%m%d`/g" "/etc/bind/zones/master.$VHDOMAIN.db"
+
+echo "
+### $VHDOMAIN ZONE START ###
+zone \"$VHDOMAIN\" {
+	type master;
+	file \"/etc/bind/zones/master.$VHDOMAIN.db\";
+	allow-query {
+		any;
+	};
+};
+### ZONE END ###
+" >> /etc/bind/named.conf.local
+
+/etc/init.d/bind9 restart
+
+fi
+
+# END DOMAIN SETUP
+
+
+
+###################
+# add mail user
+###################
+
+#echo "$1" > /tmp/user
+VHEMAIL="$VHNAME@$VHDOMAIN"
+
+# see if this looks like a real email address
+if [ ! $(echo $VHEMAIL | grep "@.") ]; then
+	echo "is not an email"
+	exit
+fi
+
+# see if this email was already added to postfix
+if [[ $(cat /etc/postfix/vmaps | grep "$VHEMAIL") ]]; then
+	echo "email exists"
+else
+	# set up dovecot user
+	echo "$VHEMAIL::5000:5000::/var/www/homes/vmail/$VHDOMAIN/:/bin/false::" >> /etc/dovecot/users
+	echo "$VHEMAIL:{PLAIN}$EMAILPASS" >> /etc/dovecot/passwd
+	#Create the needed Maildir directories
+	/usr/bin/maildirmake.dovecot "/var/www/homes/vmail/$VHDOMAIN/$VHNAME" 5000:5000
+	chown 5000:5000 "/var/www/homes/vmail/$VHDOMAIN" -R
+	#To add user to Postfix virtual map file and reload Postfix
+	echo "$VHEMAIL $VHDOMAIN/$VHNAME/" >> /etc/postfix/vmaps
+	postmap /etc/postfix/vmaps
+	# add domain to postfix so it accepts mail for it - let;s only add it if the domain is not in there alrteady
+	if [[ ! $(cat /etc/postfix/vhosts | grep "$VHDOMAIN") ]];then
+		echo "$VHDOMAIN" >> /etc/postfix/vhosts
+	fi
+	#to receive necessary addresses
+	if [[ $(cat /etc/postfix/valiases | grep "postmaster@$VHDOMAIN") ]]; then
+		echo "aliases already exist!"
+	else
+		echo "postmaster@$VHDOMAIN $VHEMAIL" >> /etc/postfix/valiases
+		echo "abuse@$VHDOMAIN $VHEMAIL" >> /etc/postfix/valiases
+		echo "root@$VHDOMAIN $VHEMAIL" >> /etc/postfix/valiases
+	fi
+	postmap /etc/postfix/valiases
+	postfix reload
+fi
+
+# END MAIL SETUP
+
+########################
+# Set up MYSQL
+########################
+
+MYSQL_ROOT='#'
+
+echo "CREATE USER '$VHNAME'@'localhost' IDENTIFIED BY '$MYSQLPASS';
+GRANT ALL PRIVILEGES ON \`"$VHNAME"_%\`.* TO '$VHNAME'@'localhost';" > /tmp/setup.sql
+
+mysql -uroot -p$MYSQL_ROOT < /tmp/setup.sql || echo "Could not set up database.  Is your root password correct?"
+
+rm /tmp/setup.sql
+
+# END MYSQL SETUP
+
+
+################
+# APACHE SETUP
+################
+
+# make user, add group, setup SSH keys
+groupadd "$VHNAME"
+
+useradd -s /bin/bash -g "$VHNAME" -m -d "/var/www/homes/$VHNAME" -k /etc/skel "$VHNAME"
+
+mkdir -p "/var/www/homes/$VHNAME/.ssh"
+
+# this allows me to connect as www-data user with ssh keys
+if [ ! -f "/var/www/homes/$VHNAME/.ssh/authorized_keys" ]; then
+	cat /root/.ssh/authorized_keys > "/var/www/homes/$VHNAME/.ssh/authorized_keys"
+	chown "$VHNAME:$VHNAME" "/var/www/homes/$VHNAME/.ssh" -Rv
+fi
+
+# set passwd
+echo $VHNAME:$VHPASS | chpasswd
+
+# set up apache
+cp /usr/local/bin/apache2.template /etc/apache2/sites-available/$VHDOMAIN
+sed -i -e "s/NAME/$VHNAME/g" -e "s/DOMAIN/$VHDOMAIN/g" /etc/apache2/sites-available/$VHDOMAIN
+a2ensite $VHDOMAIN
+/etc/init.d/apache2 force-reload
+#chown www-data:www-data /var/www/homes/$VHNAME/public_html
+
+# set up logrotate
+cp /usr/local/bin/logrotate.template /etc/logrotate.d/$VHDOMAIN
+sed -i -e "s/DOMAIN/$VHDOMAIN/g" -e "s/USERNAME/$VHNAME/g" /etc/logrotate.d/$VHDOMAIN
+htpasswd -bc /var/www/homes/$VHNAME/.htpasswd $VHNAME $STATSPASS
+
+# Need to fix fcgi and php.ini
+
+sed -i "s/NAME/$VHNAME/g" /var/www/homes/$VHNAME/bin/php.fcgi
+
+
+############
+# awstats
+###########
+
+cp /usr/local/bin/awstats.conf.template /etc/awstats/awstats.$VHDOMAIN.conf
+sed -i -e "s/DOMAIN/$VHDOMAIN/g" -e "s/USERNAME/$VHNAME/g" /etc/awstats/awstats.$VHDOMAIN.conf
+chown $VHNAME:$VHNAME /var/www/homes/$VHNAME/stats/awstats
+
+
+############
+# PHPMYADMIN
+#
+if [ ! -f /etc/phpmyadmin/htpasswd ]; then
+	htpasswd -cb /etc/phpmyadmin/htpasswd $VHNAME $STATSPASS
+else
+	htpasswd -b /etc/phpmyadmin/htpasswd $VHNAME $STATSPASS
+fi
+
+
+###########
+# WEBALIZER
+#
+cp /usr/local/bin/webalizer.conf.template /etc/webalizer/$VHDOMAIN.webalizer.conf
+sed -i -e "s/USERNAME/$VHNAME/g" -e "s/DOMAINNAME/$VHDOMAIN/g" /etc/webalizer/$VHDOMAIN.webalizer.conf
+
+# END APACHE SETUP
+
+
+############
+# MUNIN
+#
+# we want to only allow access to primary user, ie: first user created
+if [ ! -f /etc/munin/htpasswd ]; then
+	htpasswd -bc /etc/munin/htpasswd $VHNAME $VHPASS
+fi
+
+
+############
+# MONIT
+#
+
+FULLDOMAIN=$(hostname -f)
+
+# we only want to do this once too, when the not_configured file exists
+if [ -f /etc/monit/not_configured ]; then
+	sed -i -e "s/FULLDOMAIN/$FULLDOMAIN/g" -e "s/USERNAME/$VHNAME/g" -e "s/PASSWORD/$VHPASS/g" /etc/monit/monitrc
+	# remove file so it does not get touched again
+	rm -v /etc/monit/not_configured
+	sed -i "s/startup=0/startup=1/" /etc/default/monit
+fi
+
+
+# send email and print results
+
+FULLHOST=$(hostname -f)
+
+echo "
+
+New account activated:
+
+##############
+
+user: $VHNAME
+pass: $VHPASS
+domain: $VHDOMAIN
+
+mysql pass: $MYSQLPASS
+email pass: $EMAILPASS
+stats pass: $STATSPASS
+
+phpmyadmin login: http://$FULLHOST:81 (localhost only)
+
+website: http://$VHDOMAIN
+stats: http://$VHDOMAIN/webstats
+
+##############
+
+" | mailx -s "new account $VHDOMAIN activated" root -c "root@$VHDOMAIN"
+
+echo "
+New account activated:
+##############
+
+user: $VHNAME
+pass: $VHPASS
+domain: $VHDOMAIN
+
+mysql pass: $MYSQLPASS
+email pass: $EMAILPASS
+stats pass: $STATSPASS
+
+phpmyadmin login: http://$FULLHOST:81
+
+website: http://$VHDOMAIN
+stats: http://$VHDOMAIN/webstats
+
+##############
+"

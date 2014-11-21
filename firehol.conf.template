@@ -1,0 +1,36 @@
+#
+# $Id: client-all.conf,v 1.2 2002/12/31 15:44:34 ktsaou Exp $
+#
+# This configuration file will allow all requests originating from the
+# local machine to be send through all network interfaces.
+#
+# No requests are allowed to come from the network. The host will be
+# completely stealthed! It will not respond to anything, and it will
+# not be pingable, although it will be able to originate anything
+# (even pings to other hosts).
+#
+
+version 5
+# Requires a specific version of firehol
+interface "eth0" INTERNET
+# These are my internet interfaces
+protection strong 10/sec 10
+
+server "dns http https smtp imaps pop3s" accept
+server custom myssh tcp/10022 default accept
+server custom myftp tcp/10021 default accept
+server custom myftppassive tcp/60000:65535 default accept
+server custom monit tcp/12812 default accept
+server custom altpostfix tcp/10025 default accept
+
+client "dns http https smtp ident" accept
+client custom jerssh tcp/10022 default accept
+
+policy deny
+#this is important, so all connections other than the above specified are blocked
+
+UNMATCHED_INPUT_POLICY="DROP"
+#Again.. incoming other than specified drop!
+
+UNMATCHED_OUTPUT_POLICY="DROP"
+#Again.. outgoing other than specified drop!

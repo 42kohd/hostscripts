@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cat /etc/postfix/vmaps | awk '{print $1}'

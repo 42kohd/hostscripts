@@ -1,0 +1,50 @@
+#!/bin/bash
+
+
+if [ $# -ne 3 ]; then
+	echo "usage: deployTier2 DIR_TO_DEPLOY_TO DOMAIN \"KEYWORD\""
+	exit
+fi
+
+DIR_TO_DEPLOY_TO=$1
+DOMAIN=$2
+KEYWORD=$3
+
+if [ ! -d "$DIR_TO_DEPLOY_TO" ]; then
+	echo "dir not found"
+	exit
+fi
+
+if [[ ! $(echo $DIR_TO_DEPLOY_TO | grep "public_html") ]]; then
+	echo "this is not a public_html dir"
+	exit
+fi
+
+USERCHOWN=$(echo $DIR_TO_DEPLOY_TO | sed -e 's#/var/www/homes/##g' -e 's#/public_html.*##g')
+
+RANDU=$(cat /dev/urandom | tr -dc 0-9 | head -c6)
+
+cd /tmp
+mkdir $RANDU
+cd $RANDU
+
+svn export svn+jerssh://jeremychapman.info/svn/tier2template
+
+cd tier2template
+
+cp -iRv * "$DIR_TO_DEPLOY_TO/"
+cp -iRv .htaccess "$DIR_TO_DEPLOY_TO/"
+
+chown -Rv "$USERCHOWN:$USERCHOWN" "$DIR_TO_DEPLOY_TO/"
+
+rm -rfv "/tmp/$RANDU"
+
+cd "$DIR_TO_DEPLOY_TO"
+
+find . -type f -exec chmod 644 {} \;
+find . -type d -exec chmod 755 {} \;
+
+find . -type f -name "*.php" -exec sed -i "s/~~KEYWORD1~~/$KEYWORD/g" {} \;
+find . -type f -name "*.php" -exec sed -i "s/~~DOMAIN~~/$DOMAIN/g" {} \;
+
+logger -t tier2template "t2template deployed in $DIR_TO_DEPLOY_TO"

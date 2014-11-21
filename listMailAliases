@@ -1,0 +1,17 @@
+#!/bin/bash
+set -o nounset
+set -o errexit
+
+
+ALIASES=$(cat /etc/postfix/valiases | sed 's/ /-->/g')
+
+MAINALIASES=$(echo "$ALIASES" | sed '/^@/d')
+
+DOMAINALIASES=$(echo "$ALIASES" | sed '/^@/!d')
+
+for i in $MAINALIASES; do
+	echo $i
+done
+for i in $DOMAINALIASES; do
+	echo $i
+done

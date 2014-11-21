@@ -1,0 +1,65 @@
+#!/bin/bash
+
+VHNAME=$1
+VHDOMAIN=$2
+
+if [ $# -lt 2 ]
+then
+	echo "usage: delVhostuser.sh NAME DOMAIN"
+	exit
+else
+	echo $VHNAME
+	echo $VHDOMAIN
+	echo $VHPASS
+fi
+
+# let's make sure request is sane
+if [ ! -d /var/www/homes/$VHNAME ]; then
+	echo "user not found"
+	exit
+fi
+if [ ! -f /etc/apache2/sites-available/$VHDOMAIN ]; then
+	echo "domain not found"
+	exit
+fi
+
+echo "going to delete user $VHNAME"
+read -p "confirm? (type yes) :" confirm
+stty -echo 
+
+if [ $confirm = "yes" ]; then
+	echo
+else
+	echo "exiting"
+	exit 0
+fi
+
+
+#exit 0
+
+#deluser --remove-home $VHNAME
+
+#delgroup $VHNAME
+
+rm -rfv /var/www/homes/$VHNAME
+
+a2dissite $VHDOMAIN
+
+echo
+
+rm -v /etc/apache2/sites-available/$VHDOMAIN
+
+echo
+
+rm -v "/etc/logrotate.d/$VHDOMAIN"
+
+echo
+
+rm -v /etc/awstats/awstats.$VHDOMAIN.conf
+
+echo
+
+/etc/init.d/apache2 force-reload
+
+#echo "=-=-=-=-="
+echo "done"

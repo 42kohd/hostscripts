@@ -1,0 +1,140 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+	echo "usage: delUser USERNAME DOMAIN"
+	exit
+fi
+
+VHUSERNAME=$1
+VHDOMAIN=$2
+
+
+###############
+# DELETE BIND ENTRIES
+#
+
+cp /etc/bind/named.conf.local /etc/bind/named.conf.local.bak
+
+cat /etc/bind/named.conf.local.bak | sed -e "/### $VHDOMAIN ZONE START ###/,/### ZONE END ###/d" -e '/^$/d' > /etc/bind/named.conf.local
+
+rm -v "/etc/bind/zones/master.$VHDOMAIN.db"
+
+/etc/init.d/bind9 restart
+
+echo "bind done"
+
+
+
+
+
+#################
+# DELETE MAIL USER
+#
+
+EMAIL="$VHUSERNAME@$VHDOMAIN"
+
+#if [[ ! $(cat /etc/postfix/vmaps | grep "$EMAIL") ]]; then
+#	echo "email not found"
+#	exit
+#fi
+
+sed -i "/$EMAIL/d" /etc/dovecot/users
+sed -i "/$EMAIL/d" /etc/dovecot/passwd
+
+sed -i "/$EMAIL/d" /etc/postfix/vmaps
+sed -i "/$EMAIL/d" /etc/postfix/valiases
+
+postmap /etc/postfix/vmaps
+postmap /etc/postfix/valiases
+postfix reload
+
+rm -irfv /var/www/homes/vmail/$VHDOMAIN/$VHUSERNAME
+
+# if this was last email for domain, delete aliases for it
+if [[ ! $(cat /etc/postfix/vmaps | grep "$VHDOMAIN") ]]; then
+	sed -i -e "/$VHDOMAIN/d" -e '/^$/d' /etc/postfix/valiases
+	sed -i "/$VHDOMAIN/d" /etc/postfix/vhosts
+fi
+
+#is vmail dir empty for this user?
+if [ -z "`ls /var/www/homes/vmail/$VHDOMAIN`" ]; then
+	rm -irv "/var/www/homes/vmail/$VHDOMAIN"
+fi
+
+echo "mail removed"
+
+
+
+
+###################
+# DELETE WEB USER
+#
+
+
+# let's make sure request is sane
+#if [ ! -d /var/www/homes/$VHUSERNAME ]; then
+#	echo "user not found"
+#	exit
+#fi
+if [ ! -f /etc/apache2/sites-available/$VHDOMAIN ]; then
+	echo "domain not found"
+	exit
+fi
+
+
+deluser --remove-home $VHUSERNAME
+
+delgroup $VHUSERNAME
+
+rm -irv /var/www/homes/$VHUSERNAME
+rm -irv /var/www/homes/jail/home/$VHUSERNAME
+
+a2dissite $VHDOMAIN
+
+echo
+
+rm -iv /etc/apache2/sites-available/$VHDOMAIN
+
+echo
+
+rm -iv "/etc/logrotate.d/$VHDOMAIN"
+
+echo
+
+rm -iv /etc/awstats/awstats.$VHDOMAIN.conf
+
+echo
+
+rm -iv /etc/webalizer/$VHDOMAIN.webalizer.conf
+
+
+/etc/init.d/apache2 force-reload
+
+
+
+
+######################
+# PHPMYADMIN AND MYSQL
+#
+
+
+
+sed -i "/$VHUSERNAME/d" /etc/phpmyadmin/htpasswd
+
+
+###################
+# SUDO
+#
+
+
+
+sed -i "/$VHUSERNAME/d" /etc/sudoers
+
+
+
+echo "other places you may want to clean manually"
+
+cd /etc/
+grep -R "$VHUSERNAME" *
+grep -R "$VHDOMAIN" *
+

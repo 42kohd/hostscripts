@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ $# -ne 6 ]; then
+	echo "usage: migrateMail LOCALUSER LOCALPASSWORD LOCALSERVER REMOTEUSER REMOTEPASSWORD REMOTESERVER"
+	exit
+fi
+
+LOCALUSER=$1
+LOCALPASSWORD=$2
+LOCALSERVER=$3
+REMOTEUSER=$4
+REMOTEPASSWORD=$5
+REMOTESERVER=$6
+
+imapsync \
+--host1 $LOCALSERVER \
+--user1 $LOCALUSER \
+--password1 $LOCALPASS \
+--ssl1 \
+--port1 993 \
+--host2 $REMOTESERVER \
+--user2 $REMOTEUSER \
+--password2 $REMOTEPASSWORD \
+--ssl2 \
+--port2 993
