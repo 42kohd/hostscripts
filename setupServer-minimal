@@ -224,18 +224,18 @@ echo "/etc/skel done"
 #############
 # FCGID
 #
-echo "#!/bin/sh
-PHPRC="/var/www/homes/NAME/conf/"
-export PHPRC
+#echo "#!/bin/sh
+#PHPRC="/var/www/homes/NAME/conf/"
+#export PHPRC
 #PHP_FCGI_CHILDREN=4
 #export PHP_FCGI_CHILDREN
 #PHP_FCGI_MAX_REQUESTS=200
 #export PHP_FCGI_MAX_REQUESTS
-exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
+#exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
 
-chmod 755 /etc/skel/bin/php.fcgi
+#chmod 755 /etc/skel/bin/php.fcgi
 
-cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
+#cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
 
 
 ##########
@@ -308,7 +308,7 @@ cp /usr/local/bin/proftpd.conf.template /etc/proftpd/proftpd.conf
 #############
 # APACHE2
 #
-aptitude install apache2 php5 php5-cli php-pear php5-mysql php5-suhosin libapache2-mod-fcgid php5-gd php5-mcrypt imagemagick php5-cgi apache2-suexec php5-curl php5-imagick -y
+aptitude install apache2 php5 php5-cli php-pear php5-mysql php5-gd php5-mcrypt imagemagick php5-cgi php5-curl php5-imagick php5-fpm -y
 a2enmod rewrite
 a2enmod ssl
 a2enmod fcgid
@@ -501,12 +501,6 @@ sed -i -e "s/NAMESERVER/$NEWDOMAIN/g" \
 echo "nameserver 127.0.0.1" > /etc/resolv.conf
 
 /etc/init.d/bind9 start
-
-
-
-
-
-
 
 
 echo "1) FIX FORWARDERS IN BIND/NAMED.CONF"
