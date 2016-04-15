@@ -96,9 +96,9 @@ ip -o link show
 	read -p "First network interface to be used: " ETHINPUT1
 
 	read -p "First primary IP to be used: " IPINPUT1
-	read -p "Second primary IP to be used: " IPINPUT2
-	read -p "Gateway for IP1 : " GWINPUT1
-	read -p "Gateway for IP2 : " GWINPUT2
+	read -p "Second primary IP to be used (repeat first one if only using one): " IPINPUT2
+	read -p "Gateway for IP1: " GWINPUT1
+	read -p "Gateway for IP2 (repeat first one if only using one): " GWINPUT2
 	IPADDRESS1=$(strip_ip $IPINPUT1)
 	IPADDRESS2=$(strip_ip $IPINPUT2)
 	GW1=$(strip_ip $GWINPUT1)
