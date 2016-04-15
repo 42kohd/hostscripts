@@ -90,6 +90,11 @@ read -p "Is $NOWIP1 and $NOWIP2 the correct IPs? : " NOWIPOK
 IPSDONE=0
 
 if [ $NOWIPOK != "y" ]; then
+
+ip -o link show
+
+	read -p "First network interface to be used: " ETHINPUT1
+
 	read -p "First primary IP to be used: " IPINPUT1
 	read -p "Second primary IP to be used: " IPINPUT2
 	read -p "Gateway for IP1 : " GWINPUT1
@@ -146,6 +151,7 @@ read -p "Should I setup IPs? Reboot required : " SETUPIP
 		cp /usr/local/bin/network.interfaces.template /etc/network/interfaces
 		# replace IPs in the file
 		sed -i -e "s/IP1/$IP1/g" -e "s/IP2/$IP2/g" -e "s/GW1/$GW1/g" -e "s/GW2/$GW2/g" /etc/network/interfaces
+		sed -i -e "s/ETH0/$ETHINPUT1/g" /etc/network/interfaces
 
 		# if only using one IP, delete entire IP2 stanza
 		if [ $IPADDRESS1 == $IPADDRESS2 ]; then

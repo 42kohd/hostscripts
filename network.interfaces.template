@@ -5,16 +5,16 @@ auto lo
 iface lo inet loopback
 
 ### IP 1 ###
-auto eth0
-iface eth0 inet static
+auto ETH0
+iface ETH0 inet static
 	IP1
 	netmask 255.255.255.0
 	GW1
 ### END IP 1 ###
 
 ### IP 2 ###
-auto eth0:0
-iface eth0:0 inet static
+auto ETH0:0
+iface ETH0:0 inet static
 	IP2
 	netmask 255.255.255.0
 	GW2
