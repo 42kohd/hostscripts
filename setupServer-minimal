@@ -445,7 +445,7 @@ chmod 666 /var/lib/named/dev/null /var/lib/named/dev/random
 chown -R bind:bind /var/lib/named/var/*
 chown -R bind:bind /var/lib/named/etc/bind
 echo 'SYSLOGD="-a /var/lib/named/dev/log"' > /etc/default/syslogd
-/etc/init.d/sysklogd restart
+#/etc/init.d/sysklogd restart
 # chroot done
 
 
