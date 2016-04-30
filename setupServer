@@ -308,7 +308,7 @@ sa-update
 # proftpd
 ##############
 apt-get install proftpd -y
-cp /usr/local/bin/proftpd.conf.template /etc/proftpd/proftpd.conf
+cp "$CURDIR/proftpd.conf.template" /etc/proftpd/proftpd.conf
 /etc/init.d/proftpd restart
 
 #############
