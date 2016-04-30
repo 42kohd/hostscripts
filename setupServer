@@ -3,6 +3,8 @@
 #set -o nounset
 #set -o errexit
 
+CURDIR=$(pwd)
+
 function valid_ip() {
 	local ip=$1
 	local stat=1
@@ -94,6 +96,9 @@ if [ $NOWIPOK != "y" ]; then
 	read -p "Second primary IP to be used: " IPINPUT2
 	read -p "Gateway for IP1 : " GWINPUT1
 	read -p "Gateway for IP2 : " GWINPUT2
+
+	ETHNAME=$(route | grep default | awk '{print $8}')
+
 	IPADDRESS1=$(strip_ip $IPINPUT1)
 	IPADDRESS2=$(strip_ip $IPINPUT2)
 	GW1=$(strip_ip $GWINPUT1)
@@ -146,6 +151,7 @@ read -p "Should I setup IPs? Reboot required : " SETUPIP
 		cp /usr/local/bin/network.interfaces.template /etc/network/interfaces
 		# replace IPs in the file
 		sed -i -e "s/IP1/$IP1/g" -e "s/IP2/$IP2/g" -e "s/GW1/$GW1/g" -e "s/GW2/$GW2/g" /etc/network/interfaces
+		sed -i -e "s/ETHNAME/$ETHNAME/g" /etc/network/interfaces
 
 		# if only using one IP, delete entire IP2 stanza
 		if [ $IPADDRESS1 == $IPADDRESS2 ]; then
