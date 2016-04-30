@@ -148,7 +148,7 @@ fi
 if [[ "$IPSDONE" != 1 ]];then
 read -p "Should I setup IPs? Reboot required : " SETUPIP
 	if [ "$SETUPIP" == "y" ]; then
-		cp /usr/local/bin/network.interfaces.template /etc/network/interfaces
+		cp $CURDIR/network.interfaces.template /etc/network/interfaces
 		# replace IPs in the file
 		sed -i -e "s/IP1/$IP1/g" -e "s/IP2/$IP2/g" -e "s/GW1/$GW1/g" -e "s/GW2/$GW2/g" /etc/network/interfaces
 		sed -i -e "s/ETHNAME/$ETHNAME/g" /etc/network/interfaces
@@ -195,7 +195,7 @@ fi
 # FIREWALL
 #
 apt-get install firehol -y
-cp /usr/local/bin/firehol.conf.template /etc/firehol/firehol.conf
+cp "$CURDIR/firehol.conf.template" /etc/firehol/firehol.conf
 sed -i "s/START_FIREHOL=NO/START_FIREHOL=YES/g" /etc/default/firehol
 echo "firewall installed, but not started, please test it.. it will start on next boot"
 
@@ -230,18 +230,18 @@ echo "/etc/skel done"
 #############
 # FCGID
 #
-echo "#!/bin/sh
-PHPRC="/var/www/homes/NAME/conf/"
-export PHPRC
+#echo "#!/bin/sh
+#PHPRC="/var/www/homes/NAME/conf/"
+#export PHPRC
 #PHP_FCGI_CHILDREN=4
 #export PHP_FCGI_CHILDREN
 #PHP_FCGI_MAX_REQUESTS=200
 #export PHP_FCGI_MAX_REQUESTS
-exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
+#exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
 
-chmod 755 /etc/skel/bin/php.fcgi
+#chmod 755 /etc/skel/bin/php.fcgi
 
-cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
+#cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
 
 
 ##########
@@ -329,17 +329,17 @@ cp /usr/local/bin/apache.mods-available.fcgid.conf.template /etc/apache2/mods-av
 ############
 # STATISTICS
 #
-aptitude install visitors graphviz libnet-xwhois-perl webalizer awstats -y
+#aptitude install visitors graphviz libnet-xwhois-perl webalizer awstats -y
 
-rm /etc/cron.d/awstats -v
+#rm /etc/cron.d/awstats -v
 
-cd /etc/webalizer
-wget http://archive.mgm51.com/mirrors/webalizer-files/geodb/geodb-latest.tgz
-tar zxvf geodb-latest.tgz
+#cd /etc/webalizer
+#wget http://archive.mgm51.com/mirrors/webalizer-files/geodb/geodb-latest.tgz
+#tar zxvf geodb-latest.tgz
 
-cd /usr/local/bin
-tar zxvf webalizer-flags.tgz
-mv flags/ /etc/skel/stats/webalizer
+#cd /usr/local/bin
+#tar zxvf webalizer-flags.tgz
+#mv flags/ /etc/skel/stats/webalizer
 
 ##############
 # MYSQL
@@ -364,27 +364,27 @@ sed -i "s/MYSQL_ROOT='#'/MYSQL_ROOT=\"$MYSQL_PASS\"/g" /usr/local/bin/addUser
 ##############
 # phpmyadmin
 #
-cp /usr/local/bin/apache.default.template /etc/apache2/sites-available/default
-aptitude install phpmyadmin -y
+cp "$CURDIR/apache.default.template" /etc/apache2/sites-available/default
+apt-get install phpmyadmin -y
 
 ###################
 # Logcheck
 #
-aptitude install logcheck -y
-cp /usr/local/bin/logcheck.cron.template /etc/cron.d/logcheck
-chown logcheck:logcheck /var/lock/logcheck -Rv
+#aptitude install logcheck -y
+#cp /usr/local/bin/logcheck.cron.template /etc/cron.d/logcheck
+#chown logcheck:logcheck /var/lock/logcheck -Rv
 
 ###################
 # MUNIN
 #
-aptitude install munin -y
-cp /usr/local/bin/munin.conf.template /etc/munin/munin.conf
-cp /usr/local/bin/munin-node.conf.template /etc/munin/munin-node.conf
-sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin.conf
-sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin-node.conf
+#aptitude install munin -y
+#cp /usr/local/bin/munin.conf.template /etc/munin/munin.conf
+#cp /usr/local/bin/munin-node.conf.template /etc/munin/munin-node.conf
+#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin.conf
+#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin-node.conf
 
 # kill unneeded plugins
-rm /etc/munin/plugins/nfs*
+#rm /etc/munin/plugins/nfs*
 
 
 ##################
@@ -404,22 +404,22 @@ rm /etc/munin/plugins/nfs*
 # LIGHTTPD
 #
 # we install this for phpmyadmin ... it is bound to localhost on port 81
-aptitude install lighttpd -y
-sed -i 's/php4/php5/' /etc/lighttpd/conf-available/10-fastcgi.conf
-cp /usr/local/bin/lighttpd.conf.template /etc/lighttpd/lighttpd.conf
-lighty-enable-mod fastcgi
-/etc/init.d/lighttpd force-reload
-mkdir -v /var/www/lighty
-cp -Rv /usr/share/phpmyadmin /var/www/lighty
-chown www-data:www-data /var/www/lighty -Rv
+#aptitude install lighttpd -y
+#sed -i 's/php4/php5/' /etc/lighttpd/conf-available/10-fastcgi.conf
+#cp /usr/local/bin/lighttpd.conf.template /etc/lighttpd/lighttpd.conf
+#lighty-enable-mod fastcgi
+#/etc/init.d/lighttpd force-reload
+#mkdir -v /var/www/lighty
+#cp -Rv /usr/share/phpmyadmin /var/www/lighty
+#chown www-data:www-data /var/www/lighty -Rv
 
 #stupid hack to fix apt
-aptitude remove lighttpd
-aptitude install lighttpd
+#aptitude remove lighttpd
+#aptitude install lighttpd
 
 # random fix shat
-chmod +x /usr/local/bin/addUser
-chmod +x /usr/local/bin/addMysqlUser
+#chmod +x /usr/local/bin/addUser
+#chmod +x /usr/local/bin/addMysqlUser
 
 
 ##############
@@ -455,8 +455,8 @@ mkdir -p /etc/bind/zones
 DATENOW=$(date +%Y%m%d)
 
 # install necessary bind files
-cp /usr/local/bin/named.conf.template /etc/bind/named.conf
-cp /usr/local/bin/named.conf.local.template /etc/bind/named.conf.local
+cp "$CURDIR/named.conf.template" /etc/bind/named.conf
+cp "$CURDIR/named.conf.local.template" /etc/bind/named.conf.local
 
 # flip those IPs
 BACKIP1=$(echo "$IPADDRESS1" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
@@ -466,8 +466,8 @@ BACKIP2=$(echo "$IPADDRESS2" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
 if [ $BACKIP1 != $BACKIP2 ];then
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "s/BACKIP2/$BACKIP2/g" /etc/bind/named.conf
 	# reverse zone files
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 	-e "s/FULLDOM/$FULLDOMAIN/g" \
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
@@ -476,18 +476,18 @@ if [ $BACKIP1 != $BACKIP2 ];then
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
 else
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "/### BACK IP2 ###/,/### END BACK IP2 ###/d" /etc/bind/named.conf
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 	-e "s/FULLDOM/$FULLDOMAIN/g" \
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
 fi	
 
 # need to insert nameservers standard to whole domain
-cp -v /usr/local/bin/master.zone.db.template.MAIN /usr/local/bin/master.zone.db.template
+cp -v "$CURDIR/master.zone.db.template.MAIN" /usr/local/bin/master.zone.db.template
 sed -i "s/NAMESERVER/$NEWDOMAIN/g" /usr/local/bin/master.zone.db.template
 
 # now install the zone template with good nameservers
-cp -v /usr/local/bin/master.zone.db.template "/etc/bind/zones/master.$NEWDOMAIN.db"
+cp -v "$CURDIR/master.zone.db.template" "/etc/bind/zones/master.$NEWDOMAIN.db"
 
 sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 -e "s/FULLDOM/$FULLDOMAIN/g" \
@@ -497,7 +497,7 @@ sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 # done with setting up main domain
 
 #fix regular domain zone template
-cp /usr/local/bin/zone.template.MAIN /usr/local/bin/zone.template
+cp "$CURDIR/zone.template.MAIN" /usr/local/bin/zone.template
 sed -i -e "s/NAMESERVER/$NEWDOMAIN/g" \
 -e "s/IP1/$IPADDRESS1/g" /usr/local/bin/zone.template
 
