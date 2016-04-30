@@ -281,7 +281,7 @@ postmaster:root
 newaliases
 
 /etc/init.d/postfix start
-cat /var/log/mail.info
+cat /var/log/mail.log
 
 sleep 2
 
