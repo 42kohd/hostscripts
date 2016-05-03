@@ -1,5 +1,7 @@
 #!/bin/bash
 
+CURDIR=`pwd`
+
 dpkg-reconfigure dash
 
 service apparmor stop
@@ -10,6 +12,127 @@ apt-get -y install ntp ntpdate
 
 service sendmail stop; update-rc.d -f sendmail remove
 
-apt-get install postfix postfix-mysql postfix-doc mariadb-client mariadb-server openssl getmail4 rkhunter binutils dovecot-imapd dovecot-pop3d dovecot-mysql dovecot-sieve sudo
+apt-get -y install postfix postfix-mysql postfix-doc mariadb-client mariadb-server openssl getmail4 rkhunter binutils dovecot-imapd dovecot-pop3d dovecot-mysql dovecot-sieve sudo
+
+cp "$CURDIR/postfix.master.cf.template /etc/postfix/master.cf"
+
+service postfix restart
+
+cp "$CURDIR/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf"
+mysql_secure_installation
+service mysql restart
+
+apt-get -y install amavisd-new spamassassin clamav clamav-daemon zoo unzip bzip2 arj nomarch lzop cabextract apt-listchanges libnet-ldap-perl libauthen-sasl-perl clamav-docs daemon libio-string-perl libio-socket-ssl-perl libnet-ident-perl zip libnet-dns-perl postgrey
+
+service spamassassin stop
+update-rc.d -f spamassassin remove
+
+cp "$CURDIR/clamd.conf /etc/clamav/"
 
 
+freshclam
+service clamav-daemon start
+
+
+apt-get -y install apache2 apache2-doc apache2-utils libapache2-mod-php php7.0 php7.0-common php7.0-gd php7.0-mysql php7.0-imap phpmyadmin php7.0-cli php7.0-cgi libapache2-mod-fcgid apache2-suexec-pristine php-pear php-auth php7.0-mcrypt mcrypt  imagemagick libruby libapache2-mod-python php7.0-curl php7.0-intl php7.0-pspell php7.0-recode php7.0-sqlite3 php7.0-tidy php7.0-xmlrpc php7.0-xsl memcached php-memcache php-imagick php-gettext
+
+a2enmod suexec rewrite ssl actions include cgi
+
+a2enmod dav_fs dav auth_digest headers
+
+service apache2 restart
+
+apt-get -y install php7.0-opcache php-apcu
+
+service apache2 restart
+
+
+apt-get -y install libapache2-mod-fastcgi php7.0-fpm
+
+a2enmod actions fastcgi alias
+service apache2 restart
+
+sudo apt-get -y install hhvm
+
+apt-get -y install git
+
+cd /opt
+git clone https://github.com/letsencrypt/letsencrypt
+cd letsencrypt/
+
+./letsencrypt-auto --help
+
+cd "$CURDIR"
+
+apt-get -y install pure-ftpd-common pure-ftpd-mysql quota quotatool
+
+cp "$CURDIR/pure-ftpd-common" /etc/default/
+
+echo 1 > /etc/pure-ftpd/conf/TLS
+
+mkdir -p /etc/ssl/private/
+
+openssl req -x509 -nodes -days 7300 -newkey rsa:2048 -keyout /etc/ssl/private/pure-ftpd.pem -out /etc/ssl/private/pure-ftpd.pem
+
+chmod 600 /etc/ssl/private/pure-ftpd.pem
+
+service pure-ftpd-mysql restart
+
+read -p "add this line to mount point : usrjquota=quota.user,grpjquota=quota.group,jqfmt=vfsv0"
+mount -o remount /
+quotacheck -avugm
+quotaon -avug
+
+apt-get -y install bind9 dnsutils haveged
+apt-get -y install vlogger webalizer awstats geoip-database libclass-dbi-mysql-perl
+
+echo "" > /etc/cron.d/awstats
+
+apt-get install fail2ban
+
+echo '[pureftpd]
+enabled  = true
+port     = ftp
+filter   = pureftpd
+logpath  = /var/log/syslog
+maxretry = 3
+
+[dovecot-pop3imap]
+enabled = true
+filter = dovecot-pop3imap
+action = iptables-multiport[name=dovecot-pop3imap, port="pop3,pop3s,imap,imaps", protocol=tcp]
+logpath = /var/log/mail.log
+maxretry = 5
+
+[postfix-sasl]
+enabled  = true
+port     = smtp
+filter   = postfix-sasl
+logpath  = /var/log/mail.log
+maxretry = 3' > /etc/fail2ban/jail.local
+
+echo '[Definition]
+failregex = .*pure-ftpd: \(.*@<HOST>\) \[WARNING\] Authentication failed for user.*
+ignoreregex =' > /etc/fail2ban/filter.d/pureftpd.conf
+
+echo '[Definition]
+failregex = (?: pop3-login|imap-login): .*(?:Authentication failure|Aborted login \(auth failed|Aborted login \(tried to use disabled|Disconnected \(auth failed|Aborted login \(\d+ authentication attempts).*rip=(?P<host>\S*),.*
+ignoreregex =' > /etc/fail2ban/filter.d/dovecot-pop3imap.conf
+
+echo "ignoreregex =" >> /etc/fail2ban/filter.d/postfix-sasl.conf
+
+service fail2ban restart
+
+apt-get -y install ufw
+
+apt-get -y install roundcube roundcube-core roundcube-mysql roundcube-plugins roundcube-plugins-extra javascript-common libjs-jquery-mousewheel php-net-sieve tinymce
+
+cp "$CURDIR/roundcube.conf" /etc/apache2/conf-enabled/
+
+service apache2 restart
+
+cd /tmp
+wget -O ispconfig.tar.gz https://git.ispconfig.org/ispconfig/ispconfig3/repository/archive.tar.gz?ref=stable-3.1
+tar xfz ispconfig.tar.gz
+cd ispconfig3*/install/
+php -q install.php
