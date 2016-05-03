@@ -79,6 +79,9 @@ chmod 600 /etc/ssl/private/pure-ftpd.pem
 service pure-ftpd-mysql restart
 
 read -p "add this line to mount point : usrjquota=quota.user,grpjquota=quota.group,jqfmt=vfsv0"
+
+nano /etc/fstab
+
 mount -o remount /
 quotacheck -avugm
 quotaon -avug
