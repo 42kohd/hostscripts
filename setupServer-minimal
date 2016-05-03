@@ -1,17 +1,19 @@
 #!/bin/bash
 
-#set -o nounset
-#set -o errexit
+set -o nounset
+set -o errexit
 
-function valid_ip() {
+CURDIR=`pwd`
+
+valid_ip () {
 	local ip=$1
 	local stat=1
 	if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
 		OIFS=$IFS
 		IFS='.'
-		ip=($ip)
+		ip=$ip
 		IFS=$OIFS
-	[[ ${ip[0]} -le 255 && ${ip[1]} -le 255 && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+		[[ ${ip[0]} -le 255 && ${ip[1]} -le 255 && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
 		stat=$?
 	fi
 if [ "$stat" == 0 ]; then
@@ -19,7 +21,7 @@ if [ "$stat" == 0 ]; then
 fi
 }
 
-function strip_ip() {
+strip_ip() {
 	echo $1 | sed -e 's/[ \t]//g' -e 's/[a-z]//g' -e 's/[A-Z]//g'
 }
 
@@ -90,15 +92,13 @@ read -p "Is $NOWIP1 and $NOWIP2 the correct IPs? : " NOWIPOK
 IPSDONE=0
 
 if [ $NOWIPOK != "y" ]; then
-
-ip -o link show
-
-	read -p "First network interface to be used: " ETHINPUT1
-
 	read -p "First primary IP to be used: " IPINPUT1
-	read -p "Second primary IP to be used (repeat first one if only using one): " IPINPUT2
-	read -p "Gateway for IP1: " GWINPUT1
-	read -p "Gateway for IP2 (repeat first one if only using one): " GWINPUT2
+	read -p "Second primary IP to be used: " IPINPUT2
+	read -p "Gateway for IP1 : " GWINPUT1
+	read -p "Gateway for IP2 : " GWINPUT2
+
+	ETHNAME=$(route | grep default | awk '{print $8}')
+
 	IPADDRESS1=$(strip_ip $IPINPUT1)
 	IPADDRESS2=$(strip_ip $IPINPUT2)
 	GW1=$(strip_ip $GWINPUT1)
@@ -148,10 +148,10 @@ fi
 if [[ "$IPSDONE" != 1 ]];then
 read -p "Should I setup IPs? Reboot required : " SETUPIP
 	if [ "$SETUPIP" == "y" ]; then
-		cp /usr/local/bin/network.interfaces.template /etc/network/interfaces
+		cp "$CURDIR/network.interfaces.template" /etc/network/interfaces
 		# replace IPs in the file
 		sed -i -e "s/IP1/$IP1/g" -e "s/IP2/$IP2/g" -e "s/GW1/$GW1/g" -e "s/GW2/$GW2/g" /etc/network/interfaces
-		sed -i -e "s/ETH0/$ETHINPUT1/g" /etc/network/interfaces
+		sed -i -e "s/ETHNAME/$ETHNAME/g" /etc/network/interfaces
 
 		# if only using one IP, delete entire IP2 stanza
 		if [ $IPADDRESS1 == $IPADDRESS2 ]; then
@@ -191,16 +191,21 @@ else
 fi
 
 
+
+#########
+# NTP
+apt-get -y install ntp ntpdate
+
 #########
 # FIREWALL
 #
 apt-get install firehol -y
-cp /usr/local/bin/firehol.conf.template /etc/firehol/firehol.conf
+cp "$CURDIR/firehol.conf.template" /etc/firehol/firehol.conf
 sed -i "s/START_FIREHOL=NO/START_FIREHOL=YES/g" /etc/default/firehol
 echo "firewall installed, but not started, please test it.. it will start on next boot"
 
 #updates reserved IP list
-get-iana
+#get-iana
 
 ##########
 # /etc/skel
@@ -226,31 +231,13 @@ touch /etc/skel/.htpasswd
 
 echo "/etc/skel done"
 
-
-#############
-# FCGID
-#
-#echo "#!/bin/sh
-#PHPRC="/var/www/homes/NAME/conf/"
-#export PHPRC
-#PHP_FCGI_CHILDREN=4
-#export PHP_FCGI_CHILDREN
-#PHP_FCGI_MAX_REQUESTS=200
-#export PHP_FCGI_MAX_REQUESTS
-#exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
-
-#chmod 755 /etc/skel/bin/php.fcgi
-
-#cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
-
-
 ##########
 # POSTFIX/DOVECOT
 #
 echo "mail server time - choose no configuration if it asks for postfix"
 sleep 2
-aptitude install postfix -y
-aptitude install dovecot-imapd dovecot-pop3d -y
+apt-get install postfix -y
+apt-get install dovecot-imapd dovecot-pop3d -y
 
 # where mail is stored
 groupadd -g 5000 vmail
@@ -261,15 +248,15 @@ chown vmail:vmail /var/www/homes/vmail -R
 # dovecot
 touch /etc/dovecot/users
 touch /etc/dovecot/passwd
-cp /usr/local/bin/dovecot.conf.template /etc/dovecot/dovecot.conf
+cp "$CURDIR/dovecot.conf.template" /etc/dovecot/dovecot.conf
 
 # postfix files
 touch /etc/postfix/vmaps
 touch /etc/postfix/valiases
 #touch /etc/postfix/vmail
 touch /etc/postfix/vhosts
-cp /usr/local/bin/postfix.main.cf.template /etc/postfix/main.cf
-cp /usr/local/bin/postfix.master.cf.template /etc/postfix/master.cf
+cp "$CURDIR/postfix.main.cf.template" /etc/postfix/main.cf
+cp "$CURDIR/postfix.master.cf.template" /etc/postfix/master.cf
 sed -i "s/MAILNAME/$FULLDOMAIN/g" /etc/postfix/main.cf
 
 postmap /etc/postfix/vmaps
@@ -281,7 +268,7 @@ postmaster:root
 newaliases
 
 /etc/init.d/postfix start
-cat /var/log/mail.info
+cat /var/log/mail.log
 
 sleep 2
 
@@ -290,10 +277,10 @@ echo "postfix and dovecot installed"
 ###########
 # spamassassin
 #
-aptitude install spamassassin -y
+apt-get install spamassassin -y
 
-cp /usr/local/bin/spamassassin.local.cf.template /etc/spamassassin/local.cf
-cp /usr/local/bin/spamassassin.default.conf.template /etc/default/spamassassin
+cp "$CURDIR/spamassassin.local.cf.template" /etc/spamassassin/local.cf
+cp "$CURDIR/spamassassin.default.conf.template" /etc/default/spamassassin
 
 mkdir -p /var/lib/spamassassin
 
@@ -307,120 +294,55 @@ sa-update
 ###############
 # proftpd
 ##############
-aptitude install proftpd -y
-cp /usr/local/bin/proftpd.conf.template /etc/proftpd/proftpd.conf
+apt-get install proftpd -y
+cp "$CURDIR/proftpd.conf.template" /etc/proftpd/proftpd.conf
 /etc/init.d/proftpd restart
-
-#############
-# APACHE2
-#
-aptitude install apache2 php5 php5-cli php-pear php5-mysql php5-gd php5-mcrypt imagemagick php5-cgi php5-curl php5-imagick php5-fpm -y
-a2enmod rewrite
-a2enmod ssl
-a2enmod fcgid
-a2enmod suexec
-a2enmod actions
-echo "Listen 80
-Listen 443" > /etc/apache2/ports.conf
-cp /usr/local/bin/apache.mods-available.fcgid.conf.template /etc/apache2/mods-available/fcgid.conf
-#cp -v /usr/local/bin/php.ini.template /etc/php5/apache2/php.ini
-/etc/init.d/apache2 force-reload
-
-############
-# STATISTICS
-#
-#aptitude install visitors graphviz libnet-xwhois-perl webalizer awstats -y
-
-#rm /etc/cron.d/awstats -v
-
-#cd /etc/webalizer
-#wget http://archive.mgm51.com/mirrors/webalizer-files/geodb/geodb-latest.tgz
-#tar zxvf geodb-latest.tgz
-
-#cd /usr/local/bin
-#tar zxvf webalizer-flags.tgz
-#mv flags/ /etc/skel/stats/webalizer
 
 ##############
 # MYSQL
 #
-
 MYSQL_PASS=$(/usr/local/bin/mkPasswd)
-
 echo "If asked, please use $MYSQL_PASS for the password (hit enter after copying the password)"
-
 read -e
-
-aptitude install mysql-server -y
+apt-get -y install mariadb-server mariadb-client
+#apt-get install mysql-server -y
 #mysqladmin -u root password "$MYSQL_PASS"
 
 # we need to install the root mysql pass in files so they can add/delete user
-cp /usr/local/bin/addMysqlUser.template /usr/local/bin/addMysqlUser
+cp "$CURDIR/addMysqlUser.template" /usr/local/bin/addMysqlUser
 sed -i "s/MYSQL_ROOT='#'/MYSQL_ROOT=\"$MYSQL_PASS\"/g" /usr/local/bin/addMysqlUser
 
-cp /usr/local/bin/addUser.MAIN /usr/local/bin/addUser
+cp "$CURDIR/addUser.MAIN" /usr/local/bin/addUser
 sed -i "s/MYSQL_ROOT='#'/MYSQL_ROOT=\"$MYSQL_PASS\"/g" /usr/local/bin/addUser
 
+
+#############
+# APACHE2
+#
+
+apt-get -y install apache2 php7.0 libapache2-mod-php7.0
+
+#apt-get install apache2 php5 php5-cli php-pear php5-mysql php5-suhosin libapache2-mod-fcgid php5-gd php5-mcrypt imagemagick php5-cgi apache2-suexec php5-curl php5-imagick -y
+echo "Listen 80
+Listen 443" > /etc/apache2/ports.conf
+#cp "$CURDIR/apache.mods-available.fcgid.conf.template" /etc/apache2/mods-available/fcgid.conf
+#/etc/init.d/apache2 force-reload
+systemctl restart apache2
+apt-get -y install php7.0-mysql php7.0-curl php7.0-gd php7.0-intl php-pear php-imagick php7.0-imap php7.0-mcrypt php-memcache  php7.0-pspell php7.0-recode php7.0-sqlite3 php7.0-tidy php7.0-xmlrpc php7.0-xsl php7.0-mbstring php-gettext
+systemctl restart apache2
+apt-get -y install php-apcu
+systemctl restart apache2
+
+a2enmod suexec rewrite ssl actions include cgi
+a2enmod dav_fs dav auth_digest headers
+a2ensite default-ssl
+systemctl restart apache2
 ##############
 # phpmyadmin
 #
-#cp /usr/local/bin/apache.default.template /etc/apache2/sites-available/default
-#aptitude install phpmyadmin -y
-
-###################
-# Logcheck
-#
-aptitude install logcheck -y
-cp /usr/local/bin/logcheck.cron.template /etc/cron.d/logcheck
-chown logcheck:logcheck /var/lock/logcheck -Rv
-
-###################
-# MUNIN
-#
-#aptitude install munin -y
-#cp /usr/local/bin/munin.conf.template /etc/munin/munin.conf
-#cp /usr/local/bin/munin-node.conf.template /etc/munin/munin-node.conf
-#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin.conf
-#sed -i "s/FULLDOMAIN/$FULLDOMAIN/g" /etc/munin/munin-node.conf
-
-# kill unneeded plugins
-#rm /etc/munin/plugins/nfs*
-
-
-##################
-# MONIT
-#
-
-# took this out since it is basically never used
-
-#aptitude install monit -y
-#cp /usr/local/bin/monitrc.template /etc/monit/monitrc
-#touch /etc/monit/not_configured
-#mkdir -p /var/www/monit
-#echo "token" > /var/www/monit/token
-
-
-###################
-# LIGHTTPD
-#
-# we install this for phpmyadmin ... it is bound to localhost on port 81
-#aptitude install lighttpd -y
-#sed -i 's/php4/php5/' /etc/lighttpd/conf-available/10-fastcgi.conf
-#cp /usr/local/bin/lighttpd.conf.template /etc/lighttpd/lighttpd.conf
-#lighty-enable-mod fastcgi
-#/etc/init.d/lighttpd force-reload
-#mkdir -v /var/www/lighty
-#cp -Rv /usr/share/phpmyadmin /var/www/lighty
-#chown www-data:www-data /var/www/lighty -Rv
-
-#stupid hack to fix apt
-#aptitude remove lighttpd
-#aptitude install lighttpd
-
-# random fix shat
-#chmod +x /usr/local/bin/addUser
-#chmod +x /usr/local/bin/addMysqlUser
-
+#cp "$CURDIR/apache.default.template" /etc/apache2/sites-available/default
+apt-get install phpmyadmin -y
+echo "update user set plugin='' where User='root'; flush privileges;" | mysql --defaults-file=/etc/mysql/debian.cnf mysql
 
 ##############
 # BIND9
@@ -445,7 +367,7 @@ chmod 666 /var/lib/named/dev/null /var/lib/named/dev/random
 chown -R bind:bind /var/lib/named/var/*
 chown -R bind:bind /var/lib/named/etc/bind
 echo 'SYSLOGD="-a /var/lib/named/dev/log"' > /etc/default/syslogd
-#/etc/init.d/sysklogd restart
+/etc/init.d/sysklogd restart
 # chroot done
 
 
@@ -455,8 +377,8 @@ mkdir -p /etc/bind/zones
 DATENOW=$(date +%Y%m%d)
 
 # install necessary bind files
-cp /usr/local/bin/named.conf.template /etc/bind/named.conf
-cp /usr/local/bin/named.conf.local.template /etc/bind/named.conf.local
+cp "$CURDIR/named.conf.template" /etc/bind/named.conf
+cp "$CURDIR/named.conf.local.template" /etc/bind/named.conf.local
 
 # flip those IPs
 BACKIP1=$(echo "$IPADDRESS1" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
@@ -466,8 +388,8 @@ BACKIP2=$(echo "$IPADDRESS2" | awk -F'[. ]' '{OFS=".";print $3,$2,$1}')
 if [ $BACKIP1 != $BACKIP2 ];then
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "s/BACKIP2/$BACKIP2/g" /etc/bind/named.conf
 	# reverse zone files
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 	-e "s/FULLDOM/$FULLDOMAIN/g" \
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
@@ -476,18 +398,18 @@ if [ $BACKIP1 != $BACKIP2 ];then
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP2.in-addr.arpa"
 else
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" -e "s/BACKIP1/$BACKIP1/g" -e "/### BACK IP2 ###/,/### END BACK IP2 ###/d" /etc/bind/named.conf
-	cp -v /usr/local/bin/rev.masterrev.in-addr.arpa.template "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
+	cp -v "$CURDIR/rev.masterrev.in-addr.arpa.template" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
 	sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 	-e "s/FULLDOM/$FULLDOMAIN/g" \
 	-e "s/DATE/$DATENOW/g" "/etc/bind/zones/rev.$BACKIP1.in-addr.arpa"
 fi	
 
 # need to insert nameservers standard to whole domain
-cp -v /usr/local/bin/master.zone.db.template.MAIN /usr/local/bin/master.zone.db.template
+cp -v "$CURDIR/master.zone.db.template.MAIN" /usr/local/bin/master.zone.db.template
 sed -i "s/NAMESERVER/$NEWDOMAIN/g" /usr/local/bin/master.zone.db.template
 
 # now install the zone template with good nameservers
-cp -v /usr/local/bin/master.zone.db.template "/etc/bind/zones/master.$NEWDOMAIN.db"
+cp -v "$CURDIR/master.zone.db.template" "/etc/bind/zones/master.$NEWDOMAIN.db"
 
 sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 -e "s/FULLDOM/$FULLDOMAIN/g" \
@@ -497,7 +419,7 @@ sed -i -e "s/DOMAIN/$NEWDOMAIN/g" \
 # done with setting up main domain
 
 #fix regular domain zone template
-cp /usr/local/bin/zone.template.MAIN /usr/local/bin/zone.template
+cp "$CURDIR/zone.template.MAIN" /usr/local/bin/zone.template
 sed -i -e "s/NAMESERVER/$NEWDOMAIN/g" \
 -e "s/IP1/$IPADDRESS1/g" /usr/local/bin/zone.template
 
@@ -507,6 +429,12 @@ sed -i -e "s/NAMESERVER/$NEWDOMAIN/g" \
 echo "nameserver 127.0.0.1" > /etc/resolv.conf
 
 /etc/init.d/bind9 start
+
+
+
+
+
+
 
 
 echo "1) FIX FORWARDERS IN BIND/NAMED.CONF"

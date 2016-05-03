@@ -1,0 +1,15 @@
+#!/bin/bash
+
+dpkg-reconfigure dash
+
+service apparmor stop
+update-rc.d -f apparmor remove
+apt-get remove apparmor apparmor-utils
+
+apt-get -y install ntp ntpdate
+
+service sendmail stop; update-rc.d -f sendmail remove
+
+apt-get install postfix postfix-mysql postfix-doc mariadb-client mariadb-server openssl getmail4 rkhunter binutils dovecot-imapd dovecot-pop3d dovecot-mysql dovecot-sieve sudo
+
+

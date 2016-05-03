@@ -226,24 +226,6 @@ touch /etc/skel/.htpasswd
 
 echo "/etc/skel done"
 
-
-#############
-# FCGID
-#
-#echo "#!/bin/sh
-#PHPRC="/var/www/homes/NAME/conf/"
-#export PHPRC
-#PHP_FCGI_CHILDREN=4
-#export PHP_FCGI_CHILDREN
-#PHP_FCGI_MAX_REQUESTS=200
-#export PHP_FCGI_MAX_REQUESTS
-#exec /usr/bin/php5-cgi" > /etc/skel/bin/php.fcgi
-
-#chmod 755 /etc/skel/bin/php.fcgi
-
-#cp /usr/local/bin/php.ini.template /etc/skel/conf/php.ini
-
-
 ##########
 # POSTFIX/DOVECOT
 #
@@ -314,6 +296,8 @@ cp "$CURDIR/proftpd.conf.template" /etc/proftpd/proftpd.conf
 #############
 # APACHE2
 #
+apt-get -y install mariadb-server mariadb-client -y
+
 apt-get install apache2 php5 php5-cli php-pear php5-mysql php5-suhosin libapache2-mod-fcgid php5-gd php5-mcrypt imagemagick php5-cgi apache2-suexec php5-curl php5-imagick -y
 a2enmod rewrite
 a2enmod ssl
